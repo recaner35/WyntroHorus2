@@ -1,0 +1,73 @@
+name: Build and Release Horus Firmware
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install Arduino CLI
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+        sudo mv bin/arduino-cli /usr/local/bin/
+        arduino-cli core update-index
+        arduino-cli core install esp32:esp32@2.0.17
+
+    - name: Install libraries
+      run: |
+        mkdir -p ~/Arduino/libraries
+        cp -r libraries/* ~/Arduino/libraries/
+
+    - name: Compile sketch
+      run: |
+        arduino-cli compile -b esp32:esp32:esp32 --build-path ./build --build-cache-path ./cache ./horus.ino
+        ls -la ./build
+
+    - name: Generate version
+      id: version
+      run: |
+        VERSION=$(grep '#define FIRMWARE_VERSION' horus.ino | cut -d'"' -f2)
+        echo "CURRENT_VERSION=$VERSION" >> $GITHUB_ENV
+        IFS='.' read -r -a VERSION_PARTS <<< "$VERSION"
+        PATCH=$(( ${VERSION_PARTS[2]} + 1 ))
+        NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
+        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+        sed -i "s/#define FIRMWARE_VERSION \"$VERSION\"/#define FIRMWARE_VERSION \"$NEW_VERSION\"/" horus.ino
+
+    - name: Commit version update
+      run: |
+        git config --global user.name 'GitHub Action'
+        git config --global user.email 'action@github.com'
+        git add horus.ino
+        git commit -m "Bump version to ${{ env.NEW_VERSION }}"
+        git push
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ env.NEW_VERSION }}
+        release_name: Release v${{ env.NEW_VERSION }}
+        draft: false
+        prerelease: false
+
+    - name: Upload .bin file
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./build/horus.ino.bin
+        asset_name: horus-v${{ env.NEW_VERSION }}.bin
+        asset_content_type: application/octet-stream
