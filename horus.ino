@@ -1,4 +1,4 @@
-#include "libraries/WiFi/WiFi.h"
+#include <WiFi.h>
 #include "libraries/WebServer/WebServer.h"
 #include "libraries/WebSocketsServer/WebSocketsServer.h"
 #include "libraries/EEPROM/EEPROM.h"
