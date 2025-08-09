@@ -27,10 +27,10 @@ jobs:
         mkdir -p ~/Arduino/libraries
         cp -r libraries/* ~/Arduino/libraries/
 
-    - name: Compile sketch
-      run: |
-        arduino-cli compile -b esp32:esp32:esp32 --build-path ./build --build-cache-path ./cache ./horus.ino
-        ls -la ./build
+- name: Compile sketch
+  run: |
+    arduino-cli compile -b esp32:esp32:esp32 --build-path ./build ./horus.ino
+    ls -la ./build
 
     - name: Generate version
       id: version
