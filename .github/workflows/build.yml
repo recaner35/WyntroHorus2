@@ -24,7 +24,7 @@ jobs:
         echo "Checking for horus.ino in root directory"
         if [ ! -f "horus.ino" ]; then
           echo "Error: horus.ino not found in root directory"
-          find /home/runner/work/horus -type f
+          find /home/runner/work/WyntroHorus2 -type f
           exit 1
         fi
         echo "horus.ino found in root directory"
