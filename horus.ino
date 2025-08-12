@@ -19,7 +19,7 @@ String mDNS_hostname;
 String custom_name;
 
 // OTA Ayarları
-#define FIRMWARE_VERSION "1.0.9"
+#define FIRMWARE_VERSION "1.0.10"
 const char* github_url = "https://api.github.com/repos/recaner35/Wyntro/releases/latest";
 const char* github_token = "";
 
