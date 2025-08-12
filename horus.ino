@@ -4,7 +4,7 @@
 #include <EEPROM.h>
 #include "libraries/ElegantOTA/ElegantOTA.h"
 #include "libraries/HTTPClient/HTTPClient.h"
-#include "libraries/ArduinoJson/ArduinoJson.h"
+#include <ArduinoJson.h>
 #include "libraries/ESPmDNS/ESPmDNS.h"
 #include <esp_wifi.h>
 
