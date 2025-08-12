@@ -1,7 +1,7 @@
 #include <WiFi.h>
 #include "libraries/WebServer/WebServer.h"
 #include <WebSocketsServer.h>
-#include "libraries/EEPROM/EEPROM.h"
+#include <EEPROM.h>
 #include "libraries/ElegantOTA/ElegantOTA.h"
 #include "libraries/HTTPClient/HTTPClient.h"
 #include "libraries/ArduinoJson/ArduinoJson.h"
