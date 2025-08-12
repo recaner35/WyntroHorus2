@@ -14,6 +14,15 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        path: .
+
+    - name: Verify repository structure
+      run: |
+        ls -la
+        if [ ! -f "horus.ino" ]; then
+          echo "Error: horus.ino not found in root directory"
+          exit 1
+        fi
 
     - name: Install Arduino CLI
       run: |
