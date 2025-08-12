@@ -18,7 +18,9 @@ jobs:
 
     - name: Verify repository structure
       run: |
+        echo "Current directory: $(pwd)"
         ls -la
+        find . -type f
         if [ ! -f "horus.ino" ]; then
           echo "Error: horus.ino not found in root directory"
           exit 1
