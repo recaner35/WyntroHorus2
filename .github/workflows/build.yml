@@ -22,6 +22,10 @@ jobs:
         arduino-cli core update-index
         arduino-cli core install esp32:esp32@3.3.0
 
+    - name: Install ArduinoJson
+      run: |
+        arduino-cli lib install ArduinoJson@6.21.4
+
     - name: Install libraries
       run: |
         mkdir -p ~/Arduino/libraries
