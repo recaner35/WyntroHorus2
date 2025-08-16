@@ -21,13 +21,10 @@ jobs:
         echo "Current directory: $(pwd)"
         ls -la
         find . -type f
-        echo "Checking for horus.ino in root directory"
         if [ ! -f "horus.ino" ]; then
           echo "Error: horus.ino not found in root directory"
-          find /home/runner/work/WyntroHorus2 -type f
           exit 1
         fi
-        echo "horus.ino found in root directory"
 
     - name: Install Arduino CLI
       run: |
