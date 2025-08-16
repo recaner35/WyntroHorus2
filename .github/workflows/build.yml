@@ -24,17 +24,17 @@ jobs:
 
     - name: Install libraries
       run: |
-        # Kütüphanelerinizi tek tek yükleyin.
-        arduino-cli lib install "ElegantOTA"
-        arduino-cli lib install "ArduinoJson"
-        arduino-cli lib install "HTTPClient"
-        arduino-cli lib install "WebSockets"
+        # Sadece projeye özel, çekirdekte olmayan kütüphaneleri yükleyin.
+        arduino-cli lib install ElegantOTA
     
-        # İhtiyacınız olan diğer kütüphaneleri de buraya ekleyin
-        # Örneğin: arduino-cli lib install "MyCustomLib"
+        # Kendi özel kütüphanelerinizi kopyalayın.
+        # Eğer bu klasörde çekirdek kütüphaneleriyle aynı isimde kütüphaneler varsa kaldırın.
+        # Örneğin: WebSockets.h, WiFi.h gibi.
+        mkdir -p ~/Arduino/libraries
+        cp -r libraries/* ~/Arduino/libraries/
     
-        # List of all installed libraries
-        arduino-cli lib list --all
+    # Yüklü kütüphaneleri listele.
+    arduino-cli lib list --all
     - name: Compile sketch
       run: |
         arduino-cli compile -b esp32:esp32:esp32 --build-path ./build ./WyntroHorus2.ino
