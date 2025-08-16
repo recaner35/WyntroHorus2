@@ -1,11 +1,11 @@
 #include <WiFi.h>
-#include "libraries/WebServer/WebServer.h"
+#include <WebServer>
 #include <WebSocketsServer.h>
 #include <EEPROM.h>
-#include "libraries/ElegantOTA/ElegantOTA.h"
-#include "libraries/HTTPClient/HTTPClient.h"
+#include <libraries/ElegantOTA/ElegantOTA.h>
+#include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include "libraries/ESPmDNS/ESPmDNS.h"
+#include <ESPmDNS.h>
 #include <esp_wifi.h>
 
 // WiFi ve Ağ Ayarları
