@@ -24,11 +24,15 @@ jobs:
 
     - name: Install libraries
       run: |
+        # Sadece harici kütüphaneleri yükle.
         arduino-cli lib install ElegantOTA
-        arduino-cli lib install ESPmDNS
-        mkdir -p ~/Arduino/libraries
-        cp -r libraries/* ~/Arduino/libraries/
-        ls -la ~/Arduino/libraries/
+    
+    # Projenizdeki diğer kütüphaneleri kopyala.
+    mkdir -p ~/Arduino/libraries
+    cp -r libraries/* ~/Arduino/libraries/
+    
+    # Kütüphaneleri listele.
+    ls -la ~/Arduino/libraries/
 
     - name: Compile sketch
       run: |
