@@ -43,11 +43,11 @@ jobs:
         cp -r libraries/* ~/Arduino/libraries/
         ls -la ~/Arduino/libraries/
 
-- name: List installed libraries
-  run: |
-    echo "--- Listing all installed libraries ---"
-    arduino-cli lib list --all
-    echo "---------------------------------------"
+    - name: List installed libraries
+      run: |
+        echo "--- Listing all installed libraries ---"
+        arduino-cli lib list --all
+        echo "---------------------------------------"
 
     - name: Compile sketch
       run: |
