@@ -2,7 +2,7 @@
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 #include <EEPROM.h>
-#include <libraries/ElegantOTA/ElegantOTA.h>
+#include <ElegantOTA.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
