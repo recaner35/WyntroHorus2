@@ -26,7 +26,6 @@ jobs:
       run: |
         # Kütüphanelerinizi tek tek yükleyin.
         arduino-cli lib install "ElegantOTA"
-        arduino-cli lib install "WebSocketsServer"
         arduino-cli lib install "ArduinoJson"
         arduino-cli lib install "EEPROM"
         arduino-cli lib install "ESPmDNS"
