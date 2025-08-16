@@ -43,6 +43,12 @@ jobs:
         cp -r libraries/* ~/Arduino/libraries/
         ls -la ~/Arduino/libraries/
 
+- name: List installed libraries
+  run: |
+    echo "--- Listing all installed libraries ---"
+    arduino-cli lib list --all
+    echo "---------------------------------------"
+
     - name: Compile sketch
       run: |
         arduino-cli compile -b esp32:esp32:esp32 --build-path ./build --library ./libraries/ ./WyntroHorus2.ino
