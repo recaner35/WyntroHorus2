@@ -1,5 +1,5 @@
 #include <WiFi.h>
-#include <WebServer>
+#include <WebServer.h>
 #include <WebSocketsServer.h>
 #include <EEPROM.h>
 #include <libraries/ElegantOTA/ElegantOTA.h>
