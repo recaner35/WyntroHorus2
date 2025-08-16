@@ -24,14 +24,16 @@ jobs:
 
     - name: Install libraries
       run: |
-        # Sadece harici kütüphaneleri yükle.
-        arduino-cli lib install ElegantOTA
+        # ArduinoJson kütüphanesini doğru yoldan yükle
+        arduino-cli lib install "ArduinoJson"
+        # ElegantOTA kütüphanesini yükle
+        arduino-cli lib install "ElegantOTA"
     
-        # Projenizdeki diğer kütüphaneleri kopyala.
+        # Kendi özel kütüphanelerinizi kopyalayın
         mkdir -p ~/Arduino/libraries
         cp -r libraries/* ~/Arduino/libraries/
     
-        # Kütüphaneleri listele.
+        # Yüklü kütüphaneleri listele
         ls -la ~/Arduino/libraries/
 
     - name: Compile sketch
