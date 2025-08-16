@@ -19,7 +19,7 @@ String mDNS_hostname;
 String custom_name;
 
 // OTA Ayarları
-#define FIRMWARE_VERSION "1.0.10"
+#define FIRMWARE_VERSION "1.0.11"
 const char* github_url = "https://api.github.com/repos/recaner35/Wyntro/releases/latest";
 const char* github_token = "";
 
@@ -167,7 +167,7 @@ String htmlPage() {
     <div class="content mt-2 space-y-4">
       <h3 class="text-xl font-semibold">Cihaz İsmi Ayarları</h3>
       <form action="/set_name" method="get" class="space-y-2">
-        <label class="block text-sm font-medium">Cihaz İsmi (1-20 karakter, sadece harf, rakam ve boşluk):</label>
+        <label class="block text-sm font-medium">Cihaz İsmi (1-20 karakter, sadece harf veya rakam):</label>
         <input type="text" name="custom_name" placeholder=")rawliteral" + escapeHtmlString(currentCustomName) + R"rawliteral(" maxlength="20" class="w-full p-2 border dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700">
         <button type="submit" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-save mr-2"></i>İsmi Kaydet</button>
       </form>
