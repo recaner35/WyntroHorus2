@@ -33,8 +33,9 @@ jobs:
         mkdir -p ~/Arduino/libraries
         cp -r libraries/* ~/Arduino/libraries/
     
-    # Yüklü kütüphaneleri listele.
-    arduino-cli lib list --all
+        # Yüklü kütüphaneleri listele.
+        arduino-cli lib list --all
+
     - name: Compile sketch
       run: |
         arduino-cli compile -b esp32:esp32:esp32 --build-path ./build ./WyntroHorus2.ino
