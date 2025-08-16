@@ -26,6 +26,7 @@ jobs:
       run: |
         # Sadece projeye özel, çekirdekte olmayan kütüphaneleri yükleyin.
         arduino-cli lib install ElegantOTA
+        arduino-cli lib install ArduinoJSON
     
         # Kendi özel kütüphanelerinizi kopyalayın.
         # Eğer bu klasörde çekirdek kütüphaneleriyle aynı isimde kütüphaneler varsa kaldırın.
