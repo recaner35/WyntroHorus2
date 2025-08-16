@@ -28,7 +28,6 @@ jobs:
         arduino-cli lib install "ElegantOTA"
         arduino-cli lib install "ArduinoJson"
         arduino-cli lib install "HTTPClient"
-        arduino-cli lib install "WebServer"
         arduino-cli lib install "WebSockets"
     
         # İhtiyacınız olan diğer kütüphaneleri de buraya ekleyin
