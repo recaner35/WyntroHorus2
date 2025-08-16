@@ -45,7 +45,7 @@ jobs:
 
     - name: Compile sketch
       run: |
-        arduino-cli compile -b esp32:esp32:esp32 --build-path ./build ./WyntroHorus2.ino
+        arduino-cli compile -b esp32:esp32:esp32 --build-path ./build --library ./libraries/ ./WyntroHorus2.ino
         ls -la ./build
 
     - name: Generate version
