@@ -27,7 +27,6 @@ jobs:
         # Kütüphanelerinizi tek tek yükleyin.
         arduino-cli lib install "ElegantOTA"
         arduino-cli lib install "ArduinoJson"
-        arduino-cli lib install "ESPmDNS"
         arduino-cli lib install "HTTPClient"
         arduino-cli lib install "WebServer"
         arduino-cli lib install "WebSockets"
