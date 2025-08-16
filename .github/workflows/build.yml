@@ -22,13 +22,13 @@ jobs:
         echo "Current directory: $(pwd)"
         ls -la
         find . -type f
-        echo "Checking for wyntrohorus2.ino in root directory"
-        if [ ! -f "wyntrohorus2.ino" ]; then
-          echo "Error: wyntrohorus2.ino not found in root directory"
+        echo "Checking for WyntroHorus2.ino in root directory"
+        if [ ! -f "WyntroHorus2.ino" ]; then
+          echo "Error: WyntroHorus2.ino not found in root directory"
           find /home/runner/work/WyntroHorus2 -type f
           exit 1
         fi
-        echo "wyntrohorus2.ino found in root directory"
+        echo "WyntroHorus2.ino found in root directory"
 
     - name: Install Arduino CLI
       run: |
@@ -53,25 +53,25 @@ jobs:
 
     - name: Compile sketch
       run: |
-        arduino-cli compile -b esp32:esp32:esp32 --build-path ./build ./wyntrohorus2.ino
+        arduino-cli compile -b esp32:esp32:esp32 --build-path ./build ./WyntroHorus2.ino
         ls -la ./build
 
     - name: Generate version
       id: version
       run: |
-        VERSION=$(grep '#define FIRMWARE_VERSION' wyntrohorus2.ino | cut -d'"' -f2)
+        VERSION=$(grep '#define FIRMWARE_VERSION' WyntroHorus2.ino | cut -d'"' -f2)
         echo "CURRENT_VERSION=$VERSION" >> $GITHUB_ENV
         IFS='.' read -r -a VERSION_PARTS <<< "$VERSION"
         PATCH=$(( ${VERSION_PARTS[2]} + 1 ))
         NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
         echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-        sed -i "s/#define FIRMWARE_VERSION \"$VERSION\"/#define FIRMWARE_VERSION \"$NEW_VERSION\"/" wyntrohorus2.ino
+        sed -i "s/#define FIRMWARE_VERSION \"$VERSION\"/#define FIRMWARE_VERSION \"$NEW_VERSION\"/" WyntroHorus2.ino
 
     - name: Commit version update
       run: |
         git config --global user.name 'GitHub Action'
         git config --global user.email 'action@github.com'
-        git add wyntrohorus2.ino
+        git add WyntroHorus2.ino
         git commit -m "Bump version to ${{ env.NEW_VERSION }}"
         git push origin main
       env:
@@ -95,6 +95,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.REPO_TOKEN || secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./build/wyntrohorus2.ino.bin
+        asset_path: ./build/WyntroHorus2.ino.bin
         asset_name: wyntrohorus2-v${{ env.NEW_VERSION }}.bin
         asset_content_type: application/octet-stream
