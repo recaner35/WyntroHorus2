@@ -20,7 +20,7 @@ String custom_name;
 
 // OTA Ayarları
 #define FIRMWARE_VERSION "1.0.13"
-const char* github_url = "https://api.github.com/repos/recaner35/Wyntro/releases/latest";
+const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
 const char* github_token = "";
 
 WebServer server(80);
@@ -193,19 +193,19 @@ String htmlPage() {
       <form action="/reset_motor" method="get">
         <button type="submit" class="w-full bg-gray-600 dark:bg-gray-500 text-white py-2 rounded-md hover:bg-gray-700 dark:hover:bg-gray-600"><i class="fas fa-undo mr-2"></i>Motor Ayarlarını Sıfırla</button>
       </form>
-      <h3 class="text-xl font-semibold">OTA Güncelleme</h3>
+      <h3 class="text-xl font-semibold">Güncelleme</h3>
       <form action="/update" method="get">
         <button type="submit" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-upload mr-2"></i>OTA Güncelleme Sayfası</button>
       </form>
       <form action="/check_ota" method="get">
-        <button type="submit" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-sync-alt mr-2"></i>OTA'yı Şimdi Kontrol Et</button>
+        <button type="submit" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-sync-alt mr-2"></i>Güncellemeyi Şimdi Kontrol Et</button>
       </form>
     </div>
     <button class="collapsible w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md mt-4 hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-network-wired mr-2"></i>Diğer Cihazlar</button>
     <div class="content mt-2 space-y-4">
       <h3 class="text-xl font-semibold">Diğer Horus by Wyntro Cihazları</h3>
       <input type="text" id="device_hostname" placeholder="Cihaz hostname (örn: MyWinder2-d99d.local)" class="w-full p-2 border dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700">
-      <button onclick="addDevice()" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-plus mr-2"></i>Cihaz Ekle</button>
+      <button onclick="addDevice()" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-plus mr-2"></i>Ekle</button>
       <p id="device_status" class="text-center"></p>
       <div id="device_list"></div>
     </div>
