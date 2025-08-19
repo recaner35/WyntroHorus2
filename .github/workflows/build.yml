@@ -29,10 +29,19 @@ jobs:
           arduino-cli lib install "ArduinoJson@7.4.2"
       - name: Firmware Sürümünü Çıkar ve Artır
         run: |
-          echo "Firmware sürümü çıkarılıyor..."
-          VERSION=$(grep 'const char.*FIRMWARE_VERSION' WyntroHorus2.ino | grep -o '"v[0-9.]*"' | tr -d '"' || echo "")
+          echo "Dosya varlığı kontrol ediliyor..."
+          if [ ! -f WyntroHorus2.ino ]; then
+            echo "Hata: WyntroHorus2.ino dosyası bulunamadı!"
+            exit 1
+          fi
+          echo "WyntroHorus2.ino içeriği kontrol ediliyor..."
+          cat WyntroHorus2.ino | grep 'FIRMWARE_VERSION'
+          VERSION=$(grep -E 'const[[:space:]]+char[[:space:]]*\*[[:space:]]*FIRMWARE_VERSION[[:space:]]*=' WyntroHorus2.ino | grep -o '"v[0-9]+\.[0-9]+\.[0-9]+"' | tr -d '"' || echo "")
           if [ -z "$VERSION" ]; then
             echo "Hata: FIRMWARE_VERSION bulunamadı veya format yanlış!"
+            echo "Beklenen format: const char* FIRMWARE_VERSION = \"vX.Y.Z\";"
+            echo "Dosya içeriği:"
+            cat WyntroHorus2.ino
             exit 1
           fi
           echo "Mevcut sürüm: $VERSION"
@@ -44,7 +53,7 @@ jobs:
           PATCH=$((PARTS[2] + 1))
           NEW_VERSION="v${PARTS[0]}.${PARTS[1]}.$PATCH"
           echo "Yeni sürüm: $NEW_VERSION"
-          sed -i "s/const char\* FIRMWARE_VERSION = \"v[0-9.]*\"/const char* FIRMWARE_VERSION = \"$NEW_VERSION\"/" WyntroHorus2.ino
+          sed -i "s/const[[:space:]]*char[[:space:]]*\*[[:space:]]*FIRMWARE_VERSION[[:space:]]*=[[:space:]]*\"v[0-9.]*\"/const char* FIRMWARE_VERSION = \"$NEW_VERSION\"/" WyntroHorus2.ino
           echo "Dosya değişikliği kontrol ediliyor..."
           if git diff --exit-code WyntroHorus2.ino; then
             echo "Uyarı: WyntroHorus2.ino’da değişiklik yok, commit atlanıyor."
@@ -83,4 +92,5 @@ jobs:
           body: |
             Yeni firmware sürümü: ${{ env.FIRMWARE_VERSION }}
             - Otomatik derleme ve OTA desteği
-            - WiFi tarama ve motor kontrolü iyileştirmeler
+            - WiFi tarama ve motor kontrolü iyileştirmeleri
+        name: Yeni Sürümü GitHub’a Yükle
