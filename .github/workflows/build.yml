@@ -18,27 +18,46 @@ jobs:
         uses: arduino/setup-arduino-cli@v1
       - name: ESP32 Platformunu Kur
         run: |
+          echo "ESP32 platformu kuruluyor..."
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@3.3.0
       - name: Kütüphaneleri Kur
         run: |
+          echo "Kütüphaneler kuruluyor..."
           arduino-cli lib install "WebSockets@2.6.1"
           arduino-cli lib install "ElegantOTA@3.1.7"
           arduino-cli lib install "ArduinoJson@7.4.2"
       - name: Firmware Sürümünü Çıkar ve Artır
         run: |
-          VERSION=$(grep 'const char.*FIRMWARE_VERSION' WyntroHorus2.ino | grep -o '"v[0-9.]*"' | tr -d '"')
+          echo "Firmware sürümü çıkarılıyor..."
+          VERSION=$(grep 'const char.*FIRMWARE_VERSION' WyntroHorus2.ino | grep -o '"v[0-9.]*"' | tr -d '"' || echo "")
+          if [ -z "$VERSION" ]; then
+            echo "Hata: FIRMWARE_VERSION bulunamadı veya format yanlış!"
+            exit 1
+          fi
+          echo "Mevcut sürüm: $VERSION"
           IFS='.' read -r -a PARTS <<< "${VERSION#v}"
+          if [ ${#PARTS[@]} -ne 3 ]; then
+            echo "Hata: Sürüm formatı vX.Y.Z olmalı, bulunan: $VERSION"
+            exit 1
+          fi
           PATCH=$((PARTS[2] + 1))
           NEW_VERSION="v${PARTS[0]}.${PARTS[1]}.$PATCH"
+          echo "Yeni sürüm: $NEW_VERSION"
           sed -i "s/const char\* FIRMWARE_VERSION = \"v[0-9.]*\"/const char* FIRMWARE_VERSION = \"$NEW_VERSION\"/" WyntroHorus2.ino
-          echo "FIRMWARE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add WyntroHorus2.ino
-          git commit -m "Firmware sürümü $NEW_VERSION’a yükseltildi"
+          echo "Dosya değişikliği kontrol ediliyor..."
+          if git diff --exit-code WyntroHorus2.ino; then
+            echo "Uyarı: WyntroHorus2.ino’da değişiklik yok, commit atlanıyor."
+          else
+            echo "FIRMWARE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git add WyntroHorus2.ino
+            git commit -m "Firmware sürümü $NEW_VERSION’a yükseltildi"
+          fi
       - name: Kodu Derle
         run: |
+          echo "Kod derleniyor..."
           arduino-cli compile --fqbn esp32:esp32:esp32 --build-path ./build WyntroHorus2.ino
       - name: Derleme Çıktısını Kontrol Et
         run: |
@@ -46,10 +65,11 @@ jobs:
           ls -la ./build
       - name: Binary Dosyasını Yeniden Adlandır
         run: |
+          echo "Binary dosyası yeniden adlandırılıyor..."
           if [ -f ./build/WyntroHorus2.ino.bin ]; then
             mv ./build/WyntroHorus2.ino.bin ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin
           else
-            echo "Binary dosyası bulunamadı!"
+            echo "Hata: Binary dosyası bulunamadı!"
             ls -la ./build
             exit 1
           fi
@@ -58,3 +78,4 @@ jobs:
         with:
           files: ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin
           tag_name: ${{ env.FIRMWARE_VERSION }}
+        name: Yeni Sürümü GitHub’a Yükle
