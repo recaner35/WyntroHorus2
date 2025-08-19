@@ -1,3 +1,4 @@
+```yaml
 name: Horus Firmware Derle ve Yayınla
 
 on:
@@ -48,6 +49,7 @@ jobs:
           echo "Dosya değişikliği kontrol ediliyor..."
           if git diff --exit-code WyntroHorus2.ino; then
             echo "Uyarı: WyntroHorus2.ino’da değişiklik yok, commit atlanıyor."
+            echo "FIRMWARE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
           else
             echo "FIRMWARE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
             git config user.name "GitHub Actions"
@@ -78,4 +80,10 @@ jobs:
         with:
           files: ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin
           tag_name: ${{ env.FIRMWARE_VERSION }}
+          name: Sürüm ${{ env.FIRMWARE_VERSION }}
+          body: |
+            Yeni firmware sürümü: ${{ env.FIRMWARE_VERSION }}
+            - Otomatik derleme ve OTA desteği
+            - WiFi tarama ve motor kontrolü iyileştirmeleri
         name: Yeni Sürümü GitHub’a Yükle
+```
