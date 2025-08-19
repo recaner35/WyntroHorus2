@@ -12,7 +12,7 @@
 // OTA Ayarları
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
 const char* github_token = getenv("GITHUB_TOKEN"); // BURAYA KENDİ TOKEN’INI EKLE
-const char* FIRMWARE_VERSION = "1.0.17";
+const char* FIRMWARE_VERSION = "v1.0.17";
 
 // WiFi Ayarları
 const char* default_ssid = "HorusAP";
