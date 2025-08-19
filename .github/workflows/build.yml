@@ -45,7 +45,8 @@ jobs:
           echo "WyntroHorus2.ino içeriği kontrol ediliyor..."
           cat WyntroHorus2.ino | grep 'FIRMWARE_VERSION'
           echo "grep komutu çalışıyor..."
-          VERSION=$(grep -E '^[[:space:]]*const[[:space:]]+char[[:space:]]*\*[[:space:]]*FIRMWARE_VERSION[[:space:]]*=' WyntroHorus2.ino | grep -o '"v[0-9]+\\.[0-9]+\\.[0-9]+"' | tr -d '"' || echo "")
+          # Sürüm numarasını doğrudan çeken yeni komut
+          VERSION=$(grep -E 'FIRMWARE_VERSION = "v([0-9]+\.[0-9]+\.[0-9]+)";' WyntroHorus2.ino | sed -E 's/.*"v([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
           echo "grep çıktısı: VERSION=$VERSION"
           if [ -z "$VERSION" ]; then
             echo "Hata: FIRMWARE_VERSION bulunamadı veya format yanlış!"
@@ -56,16 +57,16 @@ jobs:
             cat WyntroHorus2.ino
             exit 1
           fi
-          echo "Mevcut sürüm: $VERSION"
-          IFS='.' read -r -a PARTS <<< "${VERSION#v}"
+          echo "Mevcut sürüm: v$VERSION"
+          IFS='.' read -r -a PARTS <<< "$VERSION"
           if [ ${#PARTS[@]} -ne 3 ]; then
-            echo "Hata: Sürüm formatı vX.Y.Z olmalı, bulunan: $VERSION"
+            echo "Hata: Sürüm formatı vX.Y.Z olmalı, bulunan: v$VERSION"
             exit 1
           fi
           PATCH=$((PARTS[2] + 1))
           NEW_VERSION="v${PARTS[0]}.${PARTS[1]}.$PATCH"
           echo "Yeni sürüm: $NEW_VERSION"
-          sed -i "s/const[[:space:]]*char[[:space:]]*\*[[:space:]]*FIRMWARE_VERSION[[:space:]]*=[[:space:]]*\"v[0-9.]*\"/const char* FIRMWARE_VERSION = \"$NEW_VERSION\"/" WyntroHorus2.ino
+          sed -i "s/const char\* FIRMWARE_VERSION = \"v[0-9.]*\";/const char\* FIRMWARE_VERSION = \"$NEW_VERSION\";/" WyntroHorus2.ino
           echo "Dosya değişikliği kontrol ediliyor..."
           if git diff --exit-code WyntroHorus2.ino; then
             echo "Uyarı: WyntroHorus2.ino’da değişiklik yok, commit atlanıyor."
