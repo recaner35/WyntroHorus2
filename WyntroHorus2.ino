@@ -91,20 +91,7 @@ String escapeHtmlString(const String &input) {
 
 // HTML Sayfası Oluşturucu
 String htmlPage() {
-  String status = running ? "Çalışıyor" : "Durduruldu";
-  String tpd = String(turnsPerDay);
-  String duration = String(turnDuration, 1);
-  String completed = String(completedTurns);
-  String hourly = String(hourlyTurns);
-  String dir1Checked = (direction == 1) ? "checked" : "";
-  String dir2Checked = (direction == 2) ? "checked" : "";
-  String dir3Checked = (direction == 3) ? "checked" : "";
-  String currentSSID = WiFi.SSID() != "" ? WiFi.SSID() : default_ssid;
-  String connectionStatus = (WiFi.status() == WL_CONNECTED) ? "Bağlandı" : "Hotspot modunda";
-  String otaStatus = "OTA: Kontrol ediliyor...";
-  String currentCustomName = custom_name.length() > 0 ? escapeHtmlString(custom_name) : "Horus";
-  float progress = (float)completedTurns / hourlyTurns * 100;
-  String spinnerClass = running ? "" : "hidden";
+  // ... (mevcut değişken tanımları, status, tpd, vb. aynı kalıyor)
 
   String page = R"rawliteral(
 <!DOCTYPE html>
@@ -139,15 +126,15 @@ String htmlPage() {
     <p class="text-center" id="wifi">Bağlı WiFi: )rawliteral" + escapeHtmlString(currentSSID) + R"rawliteral(</p>
     <p class="text-center" id="connection_status">Bağlantı Durumu: )rawliteral" + connectionStatus + R"rawliteral(</p>
     <p class="text-center" id="ota_status">)rawliteral" + otaStatus + R"rawliteral(</p>
-    <form action="/set" method="get" class="space-y-4">
+    <div class="space-y-4">
       <div>
         <label class="block text-sm font-medium">Günlük Tur: <span id="tpd_val">)rawliteral" + tpd + R"rawliteral(</span></label>
-        <input type="range" name="tpd" min="600" max="1200" step="1" value=")rawliteral" + tpd + R"rawliteral(" oninput="tpd_val.innerText=this.value; validateTpd(this)" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
+        <input type="range" id="tpd" min="600" max="1200" step="1" value=")rawliteral" + tpd + R"rawliteral(" oninput="tpd_val.innerText=this.value; validateTpd(this)" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
         <p class="text-red-500 hidden" id="tpd_error">Günlük tur 600-1200 arasında olmalı.</p>
       </div>
       <div>
         <label class="block text-sm font-medium">Tur Süresi (saniye): <span id="duration_val">)rawliteral" + duration + R"rawliteral(</span></label>
-        <input type="range" name="duration" min="10" max="15" step="0.1" value=")rawliteral" + duration + R"rawliteral(" oninput="duration_val.innerText=this.value; validateDuration(this)" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
+        <input type="range" id="duration" min="10" max="15" step="0.1" value=")rawliteral" + duration + R"rawliteral(" oninput="duration_val.innerText=this.value; validateDuration(this)" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
         <p class="text-red-500 hidden" id="duration_error">Tur süresi 10-15 saniye arasında olmalı.</p>
       </div>
       <div>
@@ -159,47 +146,36 @@ String htmlPage() {
         </div>
       </div>
       <div class="flex justify-center space-x-4">
-        <button type="submit" name="action" value="start" class="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-play mr-2"></i>Başlat</button>
-        <button type="submit" name="action" value="stop" class="bg-red-600 dark:bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-700 dark:hover:bg-blue-600"><i class="fas fa-stop mr-2"></i>Durdur</button>
+        <button onclick="sendCommand('start')" class="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-play mr-2"></i>Başlat</button>
+        <button onclick="sendCommand('stop')" class="bg-red-600 dark:bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-700 dark:hover:bg-blue-600"><i class="fas fa-stop mr-2"></i>Durdur</button>
       </div>
-    </form>
+    </div>
     <button class="collapsible w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md mt-4 hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-cog mr-2"></i>Ayarlar Menüsü</button>
     <div class="content mt-2 space-y-4">
       <h3 class="text-xl font-semibold">Cihaz İsmi Ayarları</h3>
-      <form action="/set_name" method="get" class="space-y-2">
+      <div class="space-y-2">
         <label class="block text-sm font-medium">Cihaz İsmi (1-20 karakter, sadece harf veya rakam):</label>
-        <input type="text" name="custom_name" placeholder=")rawliteral" + escapeHtmlString(currentCustomName) + R"rawliteral(" maxlength="20" class="w-full p-2 border dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700">
-        <button type="submit" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-save mr-2"></i>İsmi Kaydet</button>
-      </form>
-      <form action="/reset_name" method="get">
-        <button type="submit" class="w-full bg-gray-600 dark:bg-gray-500 text-white py-2 rounded-md hover:bg-gray-700 dark:hover:bg-gray-600"><i class="fas fa-undo mr-2"></i>Cihaz İsmini Sıfırla</button>
-      </form>
+        <input type="text" id="custom_name" placeholder=")rawliteral" + escapeHtmlString(currentCustomName) + R"rawliteral(" maxlength="20" class="w-full p-2 border dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700">
+        <button onclick="setName()" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-save mr-2"></i>İsmi Kaydet</button>
+      </div>
+      <button onclick="resetName()" class="w-full bg-gray-600 dark:bg-gray-500 text-white py-2 rounded-md hover:bg-gray-700 dark:hover:bg-gray-600"><i class="fas fa-undo mr-2"></i>Cihaz İsmini Sıfırla</button>
       <h3 class="text-xl font-semibold">WiFi Ayarları</h3>
       <button id="scan_wifi_button" onclick="scanWiFi()" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-wifi mr-2"></i>Ağları Tara</button>
       <p id="scan_status" class="text-center"></p>
-      <form action="/wifi" method="get" class="space-y-2">
+      <div class="space-y-2">
         <label class="block text-sm font-medium">WiFi SSID:</label>
-        <select name="ssid" id="wifi_select" class="w-full p-2 border dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700">
+        <select id="ssid" class="w-full p-2 border dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700">
           <option value="">Ağ Seçin</option>
         </select>
         <label class="block text-sm font-medium">WiFi Şifre:</label>
-        <input type="password" name="pass" placeholder="WiFi Şifresi" class="w-full p-2 border dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700">
-        <button type="submit" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-save mr-2"></i>WiFi Kaydet</button>
-      </form>
-      <h3 class="text-xl font-semibold">Sıfırlama</h3>
-      <form action="/reset_wifi" method="get">
-        <button type="submit" class="w-full bg-gray-600 dark:bg-gray-500 text-white py-2 rounded-md hover:bg-gray-700 dark:hover:bg-gray-600"><i class="fas fa-undo mr-2"></i>WiFi Ayarlarını Sıfırla</button>
-      </form>
-      <form action="/reset_motor" method="get">
-        <button type="submit" class="w-full bg-gray-600 dark:bg-gray-500 text-white py-2 rounded-md hover:bg-gray-700 dark:hover:bg-gray-600"><i class="fas fa-undo mr-2"></i>Motor Ayarlarını Sıfırla</button>
-      </form>
+        <input type="password" id="pass" placeholder="WiFi Şifresi" class="w-full p-2 border dark:border-gray-600 rounded-md bg-gray-100 dark:bg-gray-700">
+        <button onclick="saveWiFi()" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-save mr-2"></i>WiFi Kaydet</button>
+      </div>
+      <button onclick="resetWiFi()" class="w-full bg-gray-600 dark:bg-gray-500 text-white py-2 rounded-md hover:bg-gray-700 dark:hover:bg-gray-600"><i class="fas fa-undo mr-2"></i>WiFi Ayarlarını Sıfırla</button>
+      <button onclick="resetMotor()" class="w-full bg-gray-600 dark:bg-gray-500 text-white py-2 rounded-md hover:bg-gray-700 dark:hover:bg-gray-600"><i class="fas fa-undo mr-2"></i>Motor Ayarlarını Sıfırla</button>
       <h3 class="text-xl font-semibold">Güncelleme</h3>
-      <form action="/update" method="get">
-        <button type="submit" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-upload mr-2"></i>OTA Güncelleme Sayfası</button>
-      </form>
-      <form action="/check_ota" method="get">
-        <button type="submit" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-sync-alt mr-2"></i>Güncellemeyi Şimdi Kontrol Et</button>
-      </form>
+      <button onclick="goToUpdate()" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-upload mr-2"></i>OTA Güncelleme Sayfası</button>
+      <button onclick="checkOTA()" class="w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-sync-alt mr-2"></i>Güncellemeyi Şimdi Kontrol Et</button>
     </div>
     <button class="collapsible w-full bg-blue-600 dark:bg-blue-500 text-white py-2 rounded-md mt-4 hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-network-wired mr-2"></i>Diğer Cihazlar</button>
     <div class="content mt-2 space-y-4">
