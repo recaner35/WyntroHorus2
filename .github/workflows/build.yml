@@ -88,7 +88,6 @@ jobs:
         with:
           files: ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin
           tag_name: ${{ env.FIRMWARE_VERSION }}
-          name: Sürüm ${{ env.FIRMWARE_VERSION }}
           body: |
             Yeni firmware sürümü: ${{ env.FIRMWARE_VERSION }}
             - Otomatik derleme ve OTA desteği
