@@ -92,4 +92,3 @@ jobs:
             Yeni firmware sürümü: ${{ env.FIRMWARE_VERSION }}
             - Otomatik derleme ve OTA desteği
             - WiFi tarama ve motor kontrolü iyileştirmeleri
-        name: Yeni Sürümü GitHub’a Yükle
