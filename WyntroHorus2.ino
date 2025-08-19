@@ -11,7 +11,7 @@
 
 // OTA Ayarları
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* github_token = "<YOUR_GITHUB_TOKEN>"; // BURAYA KENDİ TOKEN’INI EKLE
+const char* github_token = getenv("GITHUB_TOKEN"); // BURAYA KENDİ TOKEN’INI EKLE
 const char* FIRMWARE_VERSION = "1.0.17";
 
 // WiFi Ayarları
