@@ -27,9 +27,19 @@ jobs:
       - name: Build sketch
         run: |
           arduino-cli compile --fqbn esp32:esp32:esp32 --build-path ./build WyntroHorus2.ino
+      - name: Debug build output
+        run: |
+          echo "Build dizini içeriği:"
+          ls -la ./build
       - name: Rename binary
         run: |
-          mv ./build/WyntroHorus2.ino.esp32.esp32.bin ./build/wyntrohorus2-v${{ github.sha }}.bin
+          if [ -f ./build/WyntroHorus2.ino.bin ]; then
+            mv ./build/WyntroHorus2.ino.bin ./build/wyntrohorus2-v${{ github.sha }}.bin
+          else
+            echo "Binary dosyası bulunamadı!"
+            ls -la ./build
+            exit 1
+          fi
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
