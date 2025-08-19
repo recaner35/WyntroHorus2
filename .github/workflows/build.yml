@@ -45,7 +45,7 @@ jobs:
           echo "WyntroHorus2.ino içeriği kontrol ediliyor..."
           cat WyntroHorus2.ino | grep 'FIRMWARE_VERSION'
           echo "grep komutu çalışıyor..."
-          VERSION=$(grep -E 'const[[:space:]]+char[[:space:]]*\*[[:space:]]*FIRMWARE_VERSION[[:space:]]*=' WyntroHorus2.ino | grep -o '"v[0-9]+\\.[0-9]+\\.[0-9]+"' | tr -d '"' || echo "")
+          VERSION=$(grep -E '^[[:space:]]*const[[:space:]]+char[[:space:]]*\*[[:space:]]*FIRMWARE_VERSION[[:space:]]*=' WyntroHorus2.ino | grep -o '"v[0-9]+\\.[0-9]+\\.[0-9]+"' | tr -d '"' || echo "")
           echo "grep çıktısı: VERSION=$VERSION"
           if [ -z "$VERSION" ]; then
             echo "Hata: FIRMWARE_VERSION bulunamadı veya format yanlış!"
