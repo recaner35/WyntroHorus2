@@ -5,96 +5,33 @@ on:
     branches:
       - main
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        path: .
-        token: ${{ secrets.REPO_TOKEN || secrets.GITHUB_TOKEN }}
-
-    - name: Verify repository structure
-      run: |
-        echo "Current directory: $(pwd)"
-        ls -la
-        find . -type f
-        echo "Checking for WyntroHorus2.ino in root directory"
-        if [ ! -f "WyntroHorus2.ino" ]; then
-          echo "Error: WyntroHorus2.ino not found in root directory"
-          find /home/runner/work/WyntroHorus2 -type f
-          exit 1
-        fi
-        echo "WyntroHorus2.ino found in root directory"
-
-    - name: Install Arduino CLI
-      run: |
-        curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-        sudo mv bin/arduino-cli /usr/local/bin/
-        arduino-cli core update-index
-        arduino-cli core install esp32:esp32@3.3.0
-
-    - name: Install ArduinoJson
-      run: |
-        arduino-cli lib install ArduinoJson@7.4.2
-
-    - name: Install ElegantOTA
-      run: |
-        arduino-cli lib install ElegantOTA@3.1.7
-
-    - name: Install libraries
-      run: |
-        mkdir -p ~/Arduino/libraries
-        cp -r libraries/* ~/Arduino/libraries/
-        ls -la ~/Arduino/libraries/
-
-    - name: Compile sketch
-      run: |
-        arduino-cli compile -b esp32:esp32:esp32 --build-path ./build ./WyntroHorus2.ino
-        ls -la ./build
-
-    - name: Generate version
-      id: version
-      run: |
-        VERSION=$(grep '#define FIRMWARE_VERSION' WyntroHorus2.ino | cut -d'"' -f2)
-        echo "CURRENT_VERSION=$VERSION" >> $GITHUB_ENV
-        IFS='.' read -r -a VERSION_PARTS <<< "$VERSION"
-        PATCH=$(( ${VERSION_PARTS[2]} + 1 ))
-        NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$PATCH"
-        echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-        sed -i "s/#define FIRMWARE_VERSION \"$VERSION\"/#define FIRMWARE_VERSION \"$NEW_VERSION\"/" WyntroHorus2.ino
-
-    - name: Commit version update
-      run: |
-        git config --global user.name 'GitHub Action'
-        git config --global user.email 'action@github.com'
-        git add WyntroHorus2.ino
-        git commit -m "Bump version to ${{ env.NEW_VERSION }}"
-        git push origin main
-      env:
-        GITHUB_TOKEN: ${{ secrets.REPO_TOKEN || secrets.GITHUB_TOKEN }}
-
-    - name: Create Release
-      id: create_release
-      uses: softprops/action-gh-release@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.REPO_TOKEN || secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: v${{ env.NEW_VERSION }}
-        name: Release v${{ env.NEW_VERSION }}
-        draft: false
-        prerelease: false
-        generate_release_notes: true
-
-    - name: Upload .bin file
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.REPO_TOKEN || secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./build/WyntroHorus2.ino.bin
-        asset_name: wyntrohorus2-v${{ env.NEW_VERSION }}.bin
-        asset_content_type: application/octet-stream
+      - uses: actions/checkout@v4
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v1
+      - name: Install ESP32 platform
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.3.0
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "WebSockets@2.6.1"
+          arduino-cli lib install "ElegantOTA@3.1.7"
+          arduino-cli lib install "ArduinoJson@7.4.2"
+      - name: Build sketch
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32 --build-path ./build WyntroHorus2.ino
+      - name: Rename binary
+        run: |
+          mv ./build/WyntroHorus2.ino.esp32.esp32.bin ./build/wyntrohorus2-v${{ github.sha }}.bin
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./build/wyntrohorus2-v${{ github.sha }}.bin
+          tag_name: v${{ github.sha }}
