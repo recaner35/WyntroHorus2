@@ -199,360 +199,405 @@ String htmlPage() {
       <div id="device_list"></div>
     </div>
   </div>
-  <script>
-    function sendCommand(action) {
-      const tpd = document.getElementById('tpd').value;
-      const duration = document.getElementById('duration').value;
-      const dir = document.querySelector('input[name="dir"]:checked')?.value || '1';
-      fetch(`/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`)
+<script>
+  function sendCommand(action) {
+    const tpd = document.getElementById('tpd').value;
+    const duration = document.getElementById('duration').value;
+    const dir = document.querySelector('input[name="dir"]:checked')?.value || '1';
+    fetch(`/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`)
+      .then(response => response.text())
+      .then(data => console.log(`Komut gönderildi: ${action}`))
+      .catch(error => console.error('Komut gönderim hatası:', error));
+  }
+
+  function setName() {
+    const custom_name = document.getElementById('custom_name').value.trim();
+    if (custom_name.length > 0 && custom_name.length <= 20) {
+      fetch(`/set_name?custom_name=${encodeURIComponent(custom_name)}`)
         .then(response => response.text())
-        .then(data => console.log(`Komut gönderildi: ${action}`))
-        .catch(error => console.error('Komut gönderim hatası:', error));
+        .then(data => console.log('Cihaz ismi ayarlandı:', custom_name))
+        .catch(error => console.error('Cihaz ismi ayarlanamadı:', error));
+    } else {
+      alert('Cihaz ismi 1-20 karakter arasında olmalı!');
     }
+  }
 
-    function setName() {
-      const custom_name = document.getElementById('custom_name').value.trim();
-      if (custom_name.length > 0 && custom_name.length <= 20) {
-        fetch(`/set_name?custom_name=${encodeURIComponent(custom_name)}`)
-          .then(response => response.text())
-          .then(data => console.log('Cihaz ismi ayarlandı:', custom_name))
-          .catch(error => console.error('Cihaz ismi ayarlanamadı:', error));
-      } else {
-        alert('Cihaz ismi 1-20 karakter arasında olmalı!');
-      }
-    }
+  function resetName() {
+    fetch('/reset_name')
+      .then(response => response.text())
+      .then(data => console.log('Cihaz ismi sıfırlandı'))
+      .catch(error => console.error('Cihaz ismi sıfırlanamadı:', error));
+  }
 
-    function resetName() {
-      fetch('/reset_name')
+  function saveWiFi() {
+    const ssid = document.getElementById('ssid').value;
+    const pass = document.getElementById('pass').value;
+    if (ssid) {
+      fetch(`/wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`)
         .then(response => response.text())
-        .then(data => console.log('Cihaz ismi sıfırlandı'))
-        .catch(error => console.error('Cihaz ismi sıfırlanamadı:', error));
+        .then(data => console.log('WiFi ayarları kaydedildi:', ssid))
+        .catch(error => console.error('WiFi ayarları kaydedilemedi:', error));
+    } else {
+      alert('Lütfen bir WiFi ağı seçin!');
     }
+  }
 
-    function saveWiFi() {
-      const ssid = document.getElementById('ssid').value;
-      const pass = document.getElementById('pass').value;
-      if (ssid) {
-        fetch(`/wifi?ssid=${encodeURIComponent(ssid)}&pass=${encodeURIComponent(pass)}`)
-          .then(response => response.text())
-          .then(data => console.log('WiFi ayarları kaydedildi:', ssid))
-          .catch(error => console.error('WiFi ayarları kaydedilemedi:', error));
-      } else {
-        alert('Lütfen bir WiFi ağı seçin!');
-      }
-    }
+  function resetWiFi() {
+    fetch('/reset_wifi')
+      .then(response => response.text())
+      .then(data => console.log('WiFi ayarları sıfırlandı'))
+      .catch(error => console.error('WiFi ayarları sıfırlanamadı:', error));
+  }
 
-    function resetWiFi() {
-      fetch('/reset_wifi')
-        .then(response => response.text())
-        .then(data => console.log('WiFi ayarları sıfırlandı'))
-        .catch(error => console.error('WiFi ayarları sıfırlanamadı:', error));
-    }
+  function resetMotor() {
+    fetch('/reset_motor')
+      .then(response => response.text())
+      .then(data => {
+        console.log('Motor ayarları sıfırlandı');
+        // Arayüzü manuel güncelle
+        document.getElementById('tpd').value = 600;
+        document.getElementById('tpd_val').innerText = 600;
+        document.getElementById('duration').value = 10.0;
+        document.getElementById('duration_val').innerText = 10.0;
+        document.querySelector('input[name="dir"][value="1"]').checked = true;
+        document.getElementById('status').innerText = 'Durum: Durduruldu';
+        document.getElementById('motor_spinner').classList.add('hidden');
+        document.getElementById('turns').innerText = '0 / 25';
+        document.getElementById('progress_bar').style.width = '0%';
+      })
+      .catch(error => console.error('Motor ayarları sıfırlanamadı:', error));
+  }
 
-    function resetMotor() {
-      fetch('/reset_motor')
-        .then(response => response.text())
-        .then(data => console.log('Motor ayarları sıfırlandı'))
-        .catch(error => console.error('Motor ayarları sıfırlanamadı:', error));
-    }
+  function goToUpdate() {
+    window.location.href = '/update';
+  }
 
-    function goToUpdate() {
-      window.location.href = '/update';
-    }
+  function checkOTA() {
+    fetch('/check_ota')
+      .then(response => response.text())
+      .then(data => console.log('OTA kontrol edildi'))
+      .catch(error => console.error('OTA kontrol hatası:', error));
+  }
 
-    function checkOTA() {
-      fetch('/check_ota')
-        .then(response => response.text())
-        .then(data => console.log('OTA kontrol edildi'))
-        .catch(error => console.error('OTA kontrol hatası:', error));
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('DOM tamamen yüklendi.');
-      document.querySelectorAll('.collapsible').forEach(button => {
-        button.addEventListener('click', function() {
-          this.classList.toggle('active');
-          this.nextElementSibling.classList.toggle('active');
-          localStorage.setItem('collapsibleState_' + this.innerText, this.classList.contains('active') ? 'open' : 'closed');
-        });
+  document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM tamamen yüklendi.');
+    document.querySelectorAll('.collapsible').forEach(button => {
+      button.addEventListener('click', function() {
+        this.classList.toggle('active');
+        this.nextElementSibling.classList.toggle('active');
+        localStorage.setItem('collapsibleState_' + this.innerText, this.classList.contains('active') ? 'open' : 'closed');
       });
-
-      document.querySelectorAll('.collapsible').forEach(button => {
-        if (localStorage.getItem('collapsibleState_' + button.innerText) === 'open') {
-          button.classList.add('active');
-          button.nextElementSibling.classList.add('active');
-        }
-      });
-
-      initWebSocket();
-      updateDeviceList();
     });
 
-    function validateTpd(input) {
-      const error = document.getElementById('tpd_error');
-      if (error) {
-        console.log('validateTpd: tpd_error elemanı bulundu.');
-        if (input.value < 600 || input.value > 1200) {
-          error.classList.remove('hidden');
-        } else {
-          error.classList.add('hidden');
-        }
-      } else {
-        console.error('validateTpd: tpd_error elemanı bulunamadı!');
+    document.querySelectorAll('.collapsible').forEach(button => {
+      if (localStorage.getItem('collapsibleState_' + button.innerText) === 'open') {
+        button.classList.add('active');
+        button.nextElementSibling.classList.add('active');
       }
-    }
+    });
 
-    function validateDuration(input) {
-      const error = document.getElementById('duration_error');
-      if (error) {
-        console.log('validateDuration: duration_error elemanı bulundu.');
-        if (input.value < 10 || input.value > 15) {
-          error.classList.remove('hidden');
-        } else {
-          error.classList.add('hidden');
-        }
+    initWebSocket();
+    updateDeviceList();
+  });
+
+  function validateTpd(input) {
+    const error = document.getElementById('tpd_error');
+    if (error) {
+      console.log('validateTpd: tpd_error elemanı bulundu.');
+      if (input.value < 600 || input.value > 1200) {
+        error.classList.remove('hidden');
       } else {
-        console.error('validateDuration: duration_error elemanı bulunamadı!');
+        error.classList.add('hidden');
       }
+    } else {
+      console.error('validateTpd: tpd_error elemanı bulunamadı!');
     }
+  }
 
-    let ws;
-    function initWebSocket() {
-      console.log('WebSocket başlatılıyor: ws://' + window.location.hostname + ':81/');
-      ws = new WebSocket('ws://' + window.location.hostname + ':81/');
-      ws.onmessage = function(event) {
-        console.log('WebSocket mesaj alındı:', event.data);
-        const scanStatus = document.getElementById('scan_status');
-        if (!scanStatus) {
-          console.error('scan_status elemanı bulunamadı!');
-          return;
-        }
-        try {
-          const data = JSON.parse(event.data);
-          console.log('JSON parse edildi:', data);
-          if (data.status) {
-            const statusEl = document.getElementById('status');
-            if (statusEl) {
-              statusEl.innerText = 'Durum: ' + data.status;
-              const motorSpinner = document.getElementById('motor_spinner');
-              if (motorSpinner) {
-                motorSpinner.classList.toggle('hidden', data.status !== 'Çalışıyor');
-              } else {
-                console.error('motor_spinner elemanı bulunamadı!');
-              }
-            } else {
-              console.error('status elemanı bulunamadı!');
-            }
-          }
-          if (data.completedTurns !== undefined && data.hourlyTurns !== undefined) {
-            const turnsEl = document.getElementById('turns');
-            const progressBar = document.getElementById('progress_bar');
-            if (turnsEl && progressBar) {
-              turnsEl.innerText = data.completedTurns + ' / ' + data.hourlyTurns;
-              const progress = (data.completedTurns / data.hourlyTurns * 100).toFixed(1);
-              progressBar.style.width = progress + '%';
-            } else {
-              console.error('turns veya progress_bar elemanı bulunamadı!');
-            }
-          }
-          if (data.currentSSID) {
-            const wifiEl = document.getElementById('wifi');
-            if (wifiEl) {
-              wifiEl.innerText = 'Bağlı WiFi: ' + data.currentSSID;
-            } else {
-              console.error('wifi elemanı bulunamadı!');
-            }
-          }
-          if (data.connectionStatus) {
-            const connEl = document.getElementById('connection_status');
-            if (connEl) {
-              connEl.innerText = 'Bağlantı Durumu: ' + data.connectionStatus;
-            } else {
-              console.error('connection_status elemanı bulunamadı!');
-            }
-          }
-          if (data.wifiOptions) {
-            const ssidSelect = document.getElementById('ssid');
-            if (ssidSelect) {
-              ssidSelect.innerHTML = data.wifiOptions;
-              scanStatus.innerText = 'Tarama tamamlandı.';
-            } else {
-              console.error('ssid elemanı bulunamadı!');
-              scanStatus.innerText = 'Tarama başarısız: WiFi seçim elemanı bulunamadı.';
-            }
-          }
-          if (data.otaStatus) {
-            const otaEl = document.getElementById('ota_status');
-            if (otaEl) {
-              otaEl.innerText = data.otaStatus;
-            } else {
-              console.error('ota_status elemanı bulunamadı!');
-            }
-          }
-        } catch (error) {
-          console.error('WebSocket JSON parse hatası:', error.message);
-          scanStatus.innerText = 'Tarama başarısız: Veri işleme hatası - ' + error.message;
-        }
-      };
-      ws.onclose = function() {
-        console.log('WebSocket bağlantısı kesildi, 2 saniye sonra yeniden bağlanılıyor...');
-        setTimeout(initWebSocket, 2000);
-      };
-      ws.onerror = function(error) {
-        console.error('WebSocket hatası:', error);
-        if (scanStatus) {
-          scanStatus.innerText = 'WebSocket hatası: Bağlantı sorunu.';
-        }
-      };
+  function validateDuration(input) {
+    const error = document.getElementById('duration_error');
+    if (error) {
+      console.log('validateDuration: duration_error elemanı bulundu.');
+      if (input.value < 10 || input.value > 15) {
+        error.classList.remove('hidden');
+      } else {
+        error.classList.add('hidden');
+      }
+    } else {
+      console.error('validateDuration: duration_error elemanı bulunamadı!');
     }
+  }
 
-    let devices = JSON.parse(localStorage.getItem('watchWinderDevices')) || [];
-
-    function saveDevices() {
-      localStorage.setItem('watchWinderDevices', JSON.stringify(devices));
+  function scanWiFi() {
+    console.log('scanWiFi fonksiyonu çağrıldı.');
+    const scanStatus = document.getElementById('scan_status');
+    const ssidSelect = document.getElementById('ssid');
+    if (!scanStatus || !ssidSelect) {
+      console.error('scan_status veya ssid elemanı bulunamadı!');
+      if (scanStatus) {
+        scanStatus.innerText = 'Tarama başarısız: Gerekli HTML elemanları eksik.';
+      }
+      return;
     }
+    scanStatus.innerText = 'Tarama yapılıyor, lütfen 10-15 saniye bekleyin...';
+    ssidSelect.innerHTML = '<option value="">Ağ Seçin</option>';
+    fetch('/scan_wifi', { timeout: 30000 })
+      .then(response => {
+        if (!response.ok) throw new Error('HTTP hatası: ' + response.status);
+        return response.text();
+      })
+      .then(data => {
+        console.log('WiFi tarama yanıtı:', data);
+        if (data === 'OK') {
+          scanStatus.innerText = 'Tarama başlatıldı, sonuçlar bekleniyor...';
+        } else {
+          scanStatus.innerText = 'Tarama başarısız: Sunucudan beklenmeyen yanıt - ' + data;
+        }
+      })
+      .catch(error => {
+        console.error('WiFi tarama hatası:', error);
+        scanStatus.innerText = 'Tarama başlatılırken hata: ' + error.message;
+      });
+  }
 
-    function addDevice() {
-      console.log('addDevice fonksiyonu çağrıldı.');
-      const hostname = document.getElementById('device_hostname').value.trim();
-      const deviceStatus = document.getElementById('device_status');
-      if (!deviceStatus) {
-        console.error('device_status elemanı bulunamadı!');
+  let ws;
+  function initWebSocket() {
+    console.log('WebSocket başlatılıyor: ws://' + window.location.hostname + ':81/');
+    ws = new WebSocket('ws://' + window.location.hostname + ':81/');
+    ws.onmessage = function(event) {
+      console.log('WebSocket mesaj alındı:', event.data);
+      const scanStatus = document.getElementById('scan_status');
+      if (!scanStatus) {
+        console.error('scan_status elemanı bulunamadı!');
         return;
       }
-      if (hostname && hostname !== window.location.hostname && !devices.includes(hostname)) {
-        devices.push(hostname);
-        saveDevices();
-        document.getElementById('device_hostname').value = '';
-        deviceStatus.innerText = 'Cihaz eklendi: ' + hostname;
-        updateDeviceList();
-        fetchDeviceStatus(hostname);
-      } else {
-        deviceStatus.innerText = 'Hata: Geçerli bir hostname girin, kendi cihazınızı ekleyemezsiniz veya cihaz zaten ekli.';
+      try {
+        const data = JSON.parse(event.data);
+        console.log('JSON parse edildi:', data);
+        if (data.status) {
+          const statusEl = document.getElementById('status');
+          if (statusEl) {
+            statusEl.innerText = 'Durum: ' + data.status;
+            const motorSpinner = document.getElementById('motor_spinner');
+            if (motorSpinner) {
+              motorSpinner.classList.toggle('hidden', data.status !== 'Çalışıyor');
+            } else {
+              console.error('motor_spinner elemanı bulunamadı!');
+            }
+          } else {
+            console.error('status elemanı bulunamadı!');
+          }
+        }
+        if (data.completedTurns !== undefined && data.hourlyTurns !== undefined) {
+          const turnsEl = document.getElementById('turns');
+          const progressBar = document.getElementById('progress_bar');
+          if (turnsEl && progressBar) {
+            turnsEl.innerText = data.completedTurns + ' / ' + data.hourlyTurns;
+            const progress = (data.completedTurns / data.hourlyTurns * 100).toFixed(1);
+            progressBar.style.width = progress + '%';
+          } else {
+            console.error('turns veya progress_bar elemanı bulunamadı!');
+          }
+        }
+        if (data.currentSSID) {
+          const wifiEl = document.getElementById('wifi');
+          if (wifiEl) {
+            wifiEl.innerText = 'Bağlı WiFi: ' + data.currentSSID;
+          } else {
+            console.error('wifi elemanı bulunamadı!');
+          }
+        }
+        if (data.connectionStatus) {
+          const connEl = document.getElementById('connection_status');
+          if (connEl) {
+            connEl.innerText = 'Bağlantı Durumu: ' + data.connectionStatus;
+          } else {
+            console.error('connection_status elemanı bulunamadı!');
+          }
+        }
+        if (data.wifiOptions) {
+          const ssidSelect = document.getElementById('ssid');
+          if (ssidSelect) {
+            ssidSelect.innerHTML = data.wifiOptions;
+            scanStatus.innerText = 'Tarama tamamlandı, ağlar yüklendi.';
+            console.log('WiFi seçenekleri yüklendi:', data.wifiOptions);
+          } else {
+            console.error('ssid elemanı bulunamadı!');
+            scanStatus.innerText = 'Tarama başarısız: WiFi seçim elemanı bulunamadı.';
+          }
+        }
+        if (data.otaStatus) {
+          const otaEl = document.getElementById('ota_status');
+          if (otaEl) {
+            otaEl.innerText = data.otaStatus;
+          } else {
+            console.error('ota_status elemanı bulunamadı!');
+          }
+        }
+      } catch (error) {
+        console.error('WebSocket JSON parse hatası:', error.message);
+        scanStatus.innerText = 'Tarama başarısız: Veri işleme hatası - ' + error.message;
       }
-    }
+    };
+    ws.onclose = function() {
+      console.log('WebSocket bağlantısı kesildi, 2 saniye sonra yeniden bağlanılıyor...');
+      setTimeout(initWebSocket, 2000);
+    };
+    ws.onerror = function(error) {
+      console.error('WebSocket hatası:', error);
+      if (scanStatus) {
+        scanStatus.innerText = 'WebSocket hatası: Bağlantı sorunu.';
+      }
+    };
+  }
 
-    function removeDevice(hostname) {
-      console.log('removeDevice çağrıldı:', hostname);
-      devices = devices.filter(device => device !== hostname);
+  let devices = JSON.parse(localStorage.getItem('watchWinderDevices')) || [];
+
+  function saveDevices() {
+    localStorage.setItem('watchWinderDevices', JSON.stringify(devices));
+  }
+
+  function addDevice() {
+    console.log('addDevice fonksiyonu çağrıldı.');
+    const hostname = document.getElementById('device_hostname').value.trim();
+    const deviceStatus = document.getElementById('device_status');
+    if (!deviceStatus) {
+      console.error('device_status elemanı bulunamadı!');
+      return;
+    }
+    if (hostname && hostname !== window.location.hostname && !devices.includes(hostname)) {
+      devices.push(hostname);
       saveDevices();
-      const deviceStatus = document.getElementById('device_status');
-      if (deviceStatus) {
-        deviceStatus.innerText = 'Cihaz silindi: ' + hostname;
-      } else {
-        console.error('device_status elemanı bulunamadı!');
-      }
+      document.getElementById('device_hostname').value = '';
+      deviceStatus.innerText = 'Cihaz eklendi: ' + hostname;
       updateDeviceList();
+      fetchDeviceStatus(hostname);
+    } else {
+      deviceStatus.innerText = 'Hata: Geçerli bir hostname girin, kendi cihazınızı ekleyemezsiniz veya cihaz zaten ekli.';
     }
+  }
 
-    function fetchDeviceStatus(hostname) {
-      console.log('fetchDeviceStatus çağrıldı:', hostname);
-      fetch(`http://${hostname}/status`, { mode: 'cors' })
-        .then(response => {
-          if (!response.ok) throw new Error('Cihaz yanıt vermiyor');
-          return response.json();
-        })
-        .then(data => {
-          updateDeviceUI(hostname, data);
-        })
-        .catch(error => {
-          updateDeviceUI(hostname, { error: error.message });
-        });
+  function removeDevice(hostname) {
+    console.log('removeDevice çağrıldı:', hostname);
+    devices = devices.filter(device => device !== hostname);
+    saveDevices();
+    const deviceStatus = document.getElementById('device_status');
+    if (deviceStatus) {
+      deviceStatus.innerText = 'Cihaz silindi: ' + hostname;
+    } else {
+      console.error('device_status elemanı bulunamadı!');
     }
+    updateDeviceList();
+  }
 
-    function updateDeviceUI(hostname, data) {
-      console.log('updateDeviceUI çağrıldı:', hostname, data);
-      const deviceDiv = document.getElementById(`device_${hostname}`);
-      if (!deviceDiv) {
-        console.error(`device_${hostname} elemanı bulunamadı!`);
-        return;
-      }
-      let html = `<h3 class="device-header text-lg font-semibold bg-blue-600 dark:bg-blue-500 text-white p-2 rounded-md cursor-pointer">${hostname}</h3>`;
-      html += `<div class="device-content p-4 bg-gray-100 dark:bg-gray-700 rounded-md mt-2" id="content_${hostname}">`;
-      html += `<button class="w-full bg-red-600 dark:bg-red-500 text-white py-2 rounded-md hover:bg-red-700 dark:hover:bg-red-600 mb-2" onclick="removeDevice('${hostname}')"><i class="fas fa-trash mr-2"></i>Sil</button>`;
-      if (data.error) {
-        html += `<p class="text-red-500">Hata: ${data.error}</p>`;
-      } else {
-        html += `<p class="font-semibold">Durum: ${data.status} <i class="fas fa-spinner fa-spin ${data.status === 'Çalışıyor' ? '' : 'hidden'}" id="motor_spinner_${hostname}"></i></p>`;
-        html += `<p>Tamamlanan Turlar: ${data.completedTurns} / ${data.hourlyTurns}</p>`;
-        html += `<p>Bağlı WiFi: ${data.currentSSID}</p>`;
-        html += `<p>Bağlantı Durumu: ${data.connectionStatus}</p>`;
-        html += `<p>Firmware: ${data.firmwareVersion}</p>`;
-        html += `<div class="space-y-2">`;
-        html += `<label class="block text-sm font-medium">Günlük Tur: <span id="tpd_val_${hostname}">${data.turnsPerDay}</span></label>`;
-        html += `<input type="range" id="tpd_${hostname}" min="600" max="1200" step="1" value="${data.turnsPerDay}" oninput="tpd_val_${hostname}.innerText=this.value" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">`;
-        html += `<label class="block text-sm font-medium">Tur Süresi (saniye): <span id="duration_val_${hostname}">${data.turnDuration}</span></label>`;
-        html += `<input type="range" id="duration_${hostname}" min="10" max="15" step="0.1" value="${data.turnDuration}" oninput="duration_val_${hostname}.innerText=this.value" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">`;
-        html += `<label class="block text-sm font-medium">Dönüş Yönü:</label>`;
-        html += `<div class="flex justify-center space-x-4">`;
-        html += `<label><input type="radio" name="dir_${hostname}" value="1" ${data.direction == 1 ? 'checked' : ''}> Saat Yönü</label>`;
-        html += `<label><input type="radio" name="dir_${hostname}" value="2" ${data.direction == 2 ? 'checked' : ''}> Saat Yönünün Tersi</label>`;
-        html += `<label><input type="radio" name="dir_${hostname}" value="3" ${data.direction == 3 ? 'checked' : ''}> İleri - Geri</label>`;
-        html += `</div>`;
-        html += `<div class="flex justify-center space-x-4">`;
-        html += `<button onclick="sendDeviceCommand('${hostname}', 'start')" class="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-play mr-2"></i>Başlat</button>`;
-        html += `<button onclick="sendDeviceCommand('${hostname}', 'stop')" class="bg-red-600 dark:bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-700 dark:hover:bg-red-600"><i class="fas fa-stop mr-2"></i>Durdur</button>`;
-        html += `</div>`;
-        html += `</div>`;
-      }
+  function fetchDeviceStatus(hostname) {
+    console.log('fetchDeviceStatus çağrıldı:', hostname);
+    fetch(`http://${hostname}/status`, { mode: 'cors' })
+      .then(response => {
+        if (!response.ok) throw new Error('Cihaz yanıt vermiyor');
+        return response.json();
+      })
+      .then(data => {
+        updateDeviceUI(hostname, data);
+      })
+      .catch(error => {
+        updateDeviceUI(hostname, { error: error.message });
+      });
+  }
+
+  function updateDeviceUI(hostname, data) {
+    console.log('updateDeviceUI çağrıldı:', hostname, data);
+    const deviceDiv = document.getElementById(`device_${hostname}`);
+    if (!deviceDiv) {
+      console.error(`device_${hostname} elemanı bulunamadı!`);
+      return;
+    }
+    let html = `<h3 class="device-header text-lg font-semibold bg-blue-600 dark:bg-blue-500 text-white p-2 rounded-md cursor-pointer">${hostname}</h3>`;
+    html += `<div class="device-content p-4 bg-gray-100 dark:bg-gray-700 rounded-md mt-2" id="content_${hostname}">`;
+    html += `<button class="w-full bg-red-600 dark:bg-red-500 text-white py-2 rounded-md hover:bg-red-700 dark:hover:bg-red-600 mb-2" onclick="removeDevice('${hostname}')"><i class="fas fa-trash mr-2"></i>Sil</button>`;
+    if (data.error) {
+      html += `<p class="text-red-500">Hata: ${data.error}</p>`;
+    } else {
+      html += `<p class="font-semibold">Durum: ${data.status} <i class="fas fa-spinner fa-spin ${data.status === 'Çalışıyor' ? '' : 'hidden'}" id="motor_spinner_${hostname}"></i></p>`;
+      html += `<p>Tamamlanan Turlar: ${data.completedTurns} / ${data.hourlyTurns}</p>`;
+      html += `<p>Bağlı WiFi: ${data.currentSSID}</p>`;
+      html += `<p>Bağlantı Durumu: ${data.connectionStatus}</p>`;
+      html += `<p>Firmware: ${data.firmwareVersion}</p>`;
+      html += `<div class="space-y-2">`;
+      html += `<label class="block text-sm font-medium">Günlük Tur: <span id="tpd_val_${hostname}">${data.turnsPerDay}</span></label>`;
+      html += `<input type="range" id="tpd_${hostname}" min="600" max="1200" step="1" value="${data.turnsPerDay}" oninput="tpd_val_${hostname}.innerText=this.value" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">`;
+      html += `<label class="block text-sm font-medium">Tur Süresi (saniye): <span id="duration_val_${hostname}">${data.turnDuration}</span></label>`;
+      html += `<input type="range" id="duration_${hostname}" min="10" max="15" step="0.1" value="${data.turnDuration}" oninput="duration_val_${hostname}.innerText=this.value" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">`;
+      html += `<label class="block text-sm font-medium">Dönüş Yönü:</label>`;
+      html += `<div class="flex justify-center space-x-4">`;
+      html += `<label><input type="radio" name="dir_${hostname}" value="1" ${data.direction == 1 ? 'checked' : ''}> Saat Yönü</label>`;
+      html += `<label><input type="radio" name="dir_${hostname}" value="2" ${data.direction == 2 ? 'checked' : ''}> Saat Yönünün Tersi</label>`;
+      html += `<label><input type="radio" name="dir_${hostname}" value="3" ${data.direction == 3 ? 'checked' : ''}> İleri - Geri</label>`;
       html += `</div>`;
-      deviceDiv.innerHTML = html;
-
-      deviceDiv.querySelector('.device-header').addEventListener('click', function() {
-        const content = document.getElementById(`content_${hostname}`);
-        if (content) {
-          content.classList.toggle('active');
-          localStorage.setItem(`device_state_${hostname}`, content.classList.contains('active') ? 'open' : 'closed');
-        } else {
-          console.error(`content_${hostname} elemanı bulunamadı!`);
-        }
-      });
-
-      setTimeout(() => {
-        if (devices.includes(hostname)) {
-          fetchDeviceStatus(hostname);
-        }
-      }, 5000);
+      html += `<div class="flex justify-center space-x-4">`;
+      html += `<button onclick="sendDeviceCommand('${hostname}', 'start')" class="bg-blue-600 dark:bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"><i class="fas fa-play mr-2"></i>Başlat</button>`;
+      html += `<button onclick="sendDeviceCommand('${hostname}', 'stop')" class="bg-red-600 dark:bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-700 dark:hover:bg-red-600"><i class="fas fa-stop mr-2"></i>Durdur</button>`;
+      html += `</div>`;
+      html += `</div>`;
     }
+    html += `</div>`;
+    deviceDiv.innerHTML = html;
 
-    function sendDeviceCommand(hostname, action) {
-      const tpd = document.getElementById(`tpd_${hostname}`).value;
-      const duration = document.getElementById(`duration_${hostname}`).value;
-      const dir = document.querySelector(`input[name="dir_${hostname}"]:checked`)?.value || '1';
-      fetch(`http://${hostname}/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`, { mode: 'cors' })
-        .then(response => response.text())
-        .then(data => console.log(`Cihaz komutu gönderildi: ${hostname}, ${action}`))
-        .catch(error => console.error(`Cihaz komutu gönderilemedi: ${hostname}, ${error}`));
-    }
-
-    function updateDeviceList() {
-      console.log('updateDeviceList çağrıldı.');
-      const deviceList = document.getElementById('device_list');
-      if (!deviceList) {
-        console.error('device_list elemanı bulunamadı!');
-        return;
+    deviceDiv.querySelector('.device-header').addEventListener('click', function() {
+      const content = document.getElementById(`content_${hostname}`);
+      if (content) {
+        content.classList.toggle('active');
+        localStorage.setItem(`device_state_${hostname}`, content.classList.contains('active') ? 'open' : 'closed');
+      } else {
+        console.error(`content_${hostname} elemanı bulunamadı!`);
       }
-      deviceList.innerHTML = '';
-      devices.forEach(hostname => {
-        const deviceDiv = document.createElement('div');
-        deviceDiv.className = 'device mt-4';
-        deviceDiv.id = `device_${hostname}`;
-        deviceList.appendChild(deviceDiv);
+    });
+
+    setTimeout(() => {
+      if (devices.includes(hostname)) {
         fetchDeviceStatus(hostname);
-        const state = localStorage.getItem(`device_state_${hostname}`);
-        if (state === 'open') {
-          setTimeout(() => {
-            const content = document.getElementById(`content_${hostname}`);
-            if (content) {
-              content.classList.add('active');
-            } else {
-              console.error(`content_${hostname} elemanı bulunamadı!`);
-            }
-          }, 100);
-        }
-      });
+      }
+    }, 5000);
+  }
+
+  function sendDeviceCommand(hostname, action) {
+    const tpd = document.getElementById(`tpd_${hostname}`).value;
+    const duration = document.getElementById(`duration_${hostname}`).value;
+    const dir = document.querySelector(`input[name="dir_${hostname}"]:checked`)?.value || '1';
+    fetch(`http://${hostname}/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`, { mode: 'cors' })
+      .then(response => response.text())
+      .then(data => console.log(`Cihaz komutu gönderildi: ${hostname}, ${action}`))
+      .catch(error => console.error(`Cihaz komutu gönderilemedi: ${hostname}, ${error}`));
+  }
+
+  function updateDeviceList() {
+    console.log('updateDeviceList çağrıldı.');
+    const deviceList = document.getElementById('device_list');
+    if (!deviceList) {
+      console.error('device_list elemanı bulunamadı!');
+      return;
     }
-  </script>
+    deviceList.innerHTML = '';
+    devices.forEach(hostname => {
+      const deviceDiv = document.createElement('div');
+      deviceDiv.className = 'device mt-4';
+      deviceDiv.id = `device_${hostname}`;
+      deviceList.appendChild(deviceDiv);
+      fetchDeviceStatus(hostname);
+      const state = localStorage.getItem(`device_state_${hostname}`);
+      if (state === 'open') {
+        setTimeout(() => {
+          const content = document.getElementById(`content_${hostname}`);
+          if (content) {
+            content.classList.add('active');
+          } else {
+            console.error(`content_${hostname} elemanı bulunamadı!`);
+          }
+        }, 100);
+      }
+    });
+  }
+</script>
 </body>
 </html>
 )rawliteral";
@@ -711,7 +756,8 @@ void resetMotorSettings() {
   stopMotor();
   writeMotorSettings();
   Serial.println("Motor ayarları sıfırlandı: TPD=600, Duration=10.0, Dir=1, Running=false");
-}
+  updateWebSocket(); // Sıfırlama sonrası güncelleme gönder
+}	
 
 // WiFi ayarlarını sıfırla
 void resetWiFiCredentials() {
@@ -804,9 +850,15 @@ String scanWiFiNetworks() {
 void checkOTAUpdate() {
   HTTPClient http;
   http.begin(github_url);
-  http.addHeader("Authorization", String("token ") + github_token);
+  if (github_token && strlen(github_token) > 0) {
+    http.addHeader("Authorization", String("token ") + github_token);
+  } else {
+    Serial.println("GitHub token eksik, anonim istek gönderiliyor.");
+  }
+  http.addHeader("Accept", "application/vnd.github.v3+json");
   int httpCode = http.GET();
 
+  StaticJsonDocument<256> statusDoc;
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
     StaticJsonDocument<1024> doc;
@@ -817,33 +869,26 @@ void checkOTAUpdate() {
       latestVersion.replace("v", "");
       currentVersion.replace("v", "");
       if (latestVersion > currentVersion) {
-        String otaStatus = "Yeni sürüm mevcut: " + latestVersion;
-        StaticJsonDocument<256> statusDoc;
-        statusDoc["otaStatus"] = otaStatus;
-        String json;
-        serializeJson(statusDoc, json);
-        webSocket.broadcastTXT(json);
+        statusDoc["otaStatus"] = "Yeni sürüm mevcut: " + latestVersion;
       } else {
-        StaticJsonDocument<256> statusDoc;
         statusDoc["otaStatus"] = "Firmware güncel: " + currentVersion;
-        String json;
-        serializeJson(statusDoc, json);
-        webSocket.broadcastTXT(json);
       }
     } else {
-      StaticJsonDocument<256> statusDoc;
-      statusDoc["otaStatus"] = "OTA kontrol hatası: JSON parse";
-      String json;
-      serializeJson(statusDoc, json);
-      webSocket.broadcastTXT(json);
+      statusDoc["otaStatus"] = "OTA kontrol hatası: JSON parse hatası - " + String(error.c_str());
+      Serial.println("JSON parse hatası: " + String(error.c_str()));
     }
   } else {
-    StaticJsonDocument<256> statusDoc;
     statusDoc["otaStatus"] = "OTA kontrol hatası: HTTP " + String(httpCode);
-    String json;
-    serializeJson(statusDoc, json);
-    webSocket.broadcastTXT(json);
+    Serial.println("HTTP hatası: " + String(httpCode));
+    if (httpCode == 401) {
+      Serial.println("Yetkilendirme hatası: GitHub token’ı kontrol edin.");
+    } else if (httpCode == 403) {
+      Serial.println("API rate limit aşılmış olabilir, token gerekli veya rate limit beklenmeli.");
+    }
   }
+  String json;
+  serializeJson(statusDoc, json);
+  webSocket.broadcastTXT(json);
   http.end();
 }
 
