@@ -14,6 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         name: Depoyu Çek
+      - name: Satır Sonlarını LF’ye Dönüştür
+        run: |
+          echo "Dosya satır sonları LF’ye dönüştürülüyor..."
+          if [ -f WyntroHorus2.ino ]; then
+            sed -i 's/\r$//' WyntroHorus2.ino
+          else
+            echo "Hata: WyntroHorus2.ino bulunamadı, satır sonu dönüştürmesi atlandı."
+          fi
       - name: Arduino CLI’yi Kur
         uses: arduino/setup-arduino-cli@v1
       - name: ESP32 Platformunu Kur
@@ -36,10 +44,14 @@ jobs:
           fi
           echo "WyntroHorus2.ino içeriği kontrol ediliyor..."
           cat WyntroHorus2.ino | grep 'FIRMWARE_VERSION'
-          VERSION=$(grep -E 'const[[:space:]]+char[[:space:]]*\*[[:space:]]*FIRMWARE_VERSION[[:space:]]*=' WyntroHorus2.ino | grep -o '"v[0-9]+\.[0-9]+\.[0-9]+"' | tr -d '"' || echo "")
+          echo "grep komutu çalışıyor..."
+          VERSION=$(grep -E 'const[[:space:]]+char[[:space:]]*\*[[:space:]]*FIRMWARE_VERSION[[:space:]]*=' WyntroHorus2.ino | grep -o '"v[0-9]+\\.[0-9]+\\.[0-9]+"' | tr -d '"' || echo "")
+          echo "grep çıktısı: VERSION=$VERSION"
           if [ -z "$VERSION" ]; then
             echo "Hata: FIRMWARE_VERSION bulunamadı veya format yanlış!"
             echo "Beklenen format: const char* FIRMWARE_VERSION = \"vX.Y.Z\";"
+            echo "Bulunan satırlar:"
+            grep 'FIRMWARE_VERSION' WyntroHorus2.ino || echo "Hiçbir eşleşme bulunamadı"
             echo "Dosya içeriği:"
             cat WyntroHorus2.ino
             exit 1
@@ -83,7 +95,7 @@ jobs:
             ls -la ./build
             exit 1
           fi
-      - name: Sürümü Yayınla
+      - name: Yeni Sürümü GitHub’a Yükle
         uses: softprops/action-gh-release@v1
         with:
           files: ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin
