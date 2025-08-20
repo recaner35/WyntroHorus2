@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.31";
+const char* FIRMWARE_VERSION = "v1.0.32";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -377,7 +377,7 @@ void handleScan() {
 }
 
 void handleSaveWiFi() {
-  String old_name = String-custom_name);
+  String old_name = String(custom_name);
   if (server.hasArg("ssid")) strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
   if (server.hasArg("password")) strncpy(password, server.arg("password").c_str(), sizeof(password));
   if (server.hasArg("name")) strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name));
