@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.23";
+const char* FIRMWARE_VERSION = "v1.0.24";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -33,23 +33,22 @@ static unsigned long lastStepTime = 0;
 static bool forward = true;
 float calculatedStepDelay = 0;
 
-// Pin Definitions
-const int motorPin1 = 26; // IN1
-const int motorPin2 = 27; // IN2
-const int motorPin3 = 14; // IN3
-const int motorPin4 = 12; // IN4
-const int stepsPerRevolution = 2048;
+// Motor Pins
+const int IN1 = 17;
+const int IN2 = 5;
+const int IN3 = 18;
+const int IN4 = 19;
 
-// Stepper motor step sequence (half-step for ULN2003)
-const int stepSequence[8][4] = {
-    {1, 0, 0, 0}, // Step 0
-    {1, 1, 0, 0}, // Step 1
-    {0, 1, 0, 0}, // Step 2
-    {0, 1, 1, 0}, // Step 3
-    {0, 0, 1, 0}, // Step 4
-    {0, 0, 1, 1}, // Step 5
-    {0, 0, 0, 1}, // Step 6
-    {1, 0, 0, 1}  // Step 7
+// Motor Constants
+const int stepsPerTurn = 4096;
+const int rampSteps = 200;
+const float minStepDelay = 2.0;
+const float maxStepDelay = 10.0;
+
+// Stepper motor step sequence (half-step)
+const int steps[8][4] = {
+    {1, 0, 0, 0}, {1, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 1, 0},
+    {0, 0, 1, 0}, {0, 0, 1, 1}, {0, 0, 0, 1}, {1, 0, 0, 1}
 };
 
 // Global Objects
@@ -82,11 +81,11 @@ void checkOTAUpdateTask(void *parameter);
 void setup() {
   Serial.begin(115200);
   EEPROM.begin(512);
-  pinMode(motorPin1, OUTPUT);
-  pinMode(motorPin2, OUTPUT);
-  pinMode(motorPin3, OUTPUT);
-  pinMode(motorPin4, OUTPUT);
-  stopMotor(); // Ensure motor pins are LOW at startup
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+  stopMotor();
   readSettings();
   setupWiFi();
   setupMDNS();
@@ -107,11 +106,10 @@ void setup() {
     }
   });
 
-  // Create motor task
   xTaskCreatePinnedToCore(
       runMotorTask,
       "MotorTask",
-      4096, // Increased stack size
+      4096,
       NULL,
       1,
       &motorTaskHandle,
@@ -126,16 +124,12 @@ void loop() {
 }
 
 void stepMotor(int step) {
-  digitalWrite(motorPin1, stepSequence[step][0] ? HIGH : LOW);
-  digitalWrite(motorPin2, stepSequence[step][1] ? HIGH : LOW);
-  digitalWrite(motorPin3, stepSequence[step][2] ? HIGH : LOW);
-  digitalWrite(motorPin4, stepSequence[step][3] ? HIGH : LOW);
+  digitalWrite(IN1, steps[step][0] ? HIGH : LOW);
+  digitalWrite(IN2, steps[step][1] ? HIGH : LOW);
+  digitalWrite(IN3, steps[step][2] ? HIGH : LOW);
+  digitalWrite(IN4, steps[step][3] ? HIGH : LOW);
   Serial.printf("stepMotor: Step %d, Pins: %d %d %d %d\n",
-                step,
-                stepSequence[step][0],
-                stepSequence[step][1],
-                stepSequence[step][2],
-                stepSequence[step][3]);
+                step, steps[step][0], steps[step][1], steps[step][2], steps[step][3]);
 }
 
 void stopMotor() {
@@ -143,26 +137,46 @@ void stopMotor() {
   if (motorTaskHandle != NULL) {
     vTaskSuspend(motorTaskHandle);
   }
-  digitalWrite(motorPin1, LOW);
-  digitalWrite(motorPin2, LOW);
-  digitalWrite(motorPin3, LOW);
-  digitalWrite(motorPin4, LOW);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
   Serial.println("stopMotor: Motor stopped, all pins LOW.");
+  StaticJsonDocument<256> doc;
+  doc["motorStatus"] = "Motor durduruldu.";
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT(json);
 }
 
 void startMotor() {
   running = true;
-  calculatedStepDelay = max((turnDuration * 1000.0) / (stepsPerRevolution * 2), 5.0); // Minimum 5ms
+  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
+  calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
   Serial.printf("startMotor: Starting motor, stepDelay=%.2fms\n", calculatedStepDelay);
   if (motorTaskHandle != NULL) {
     vTaskResume(motorTaskHandle);
   }
+  StaticJsonDocument<256> doc;
+  doc["motorStatus"] = "Motor başlatıldı.";
+  String json;
+  serializeJson(doc, json);
+  webSocket.broadcastTXT(json);
 }
 
 void runMotorTask(void *parameter) {
+  static int stepCount = 0;
   for (;;) {
     if (running) {
       if (millis() - lastStepTime >= calculatedStepDelay) {
+        // Ramp calculation
+        float currentDelay = calculatedStepDelay;
+        if (stepCount < rampSteps) {
+          currentDelay = map(stepCount, 0, rampSteps, maxStepDelay, calculatedStepDelay);
+        } else if (stepCount >= stepsPerTurn - rampSteps) {
+          currentDelay = map(stepCount, stepsPerTurn - rampSteps, stepsPerTurn, calculatedStepDelay, maxStepDelay);
+        }
+
         if (direction == 1 || (direction == 3 && forward)) {
           currentStepIndex = (currentStepIndex + 1) % 8;
         } else {
@@ -170,10 +184,9 @@ void runMotorTask(void *parameter) {
         }
         stepMotor(currentStepIndex);
         lastStepTime = millis();
-
-        static int stepCount = 0;
         stepCount++;
-        if (stepCount >= stepsPerRevolution) { // Full revolution
+
+        if (stepCount >= stepsPerTurn) {
           stepCount = 0;
           completedTurns++;
           if (direction == 3) forward = !forward;
@@ -187,7 +200,7 @@ void runMotorTask(void *parameter) {
         }
       }
     }
-    vTaskDelay(pdMS_TO_TICKS(1)); // Prevent task from hogging CPU
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
@@ -205,7 +218,6 @@ void readSettings() {
   address += sizeof(turnDuration);
   EEPROM.get(address, direction);
 
-  // Validate settings
   if (turnsPerDay < 600 || turnsPerDay > 1200 || isnan(turnsPerDay)) turnsPerDay = 600;
   if (turnDuration < 10.0 || turnDuration > 15.0 || isnan(turnDuration)) turnDuration = 15.0;
   if (direction < 1 || direction > 3) direction = 1;
@@ -213,7 +225,8 @@ void readSettings() {
   if (strlen(password) > 63) password[0] = '\0';
   if (strlen(custom_name) > 20) custom_name[0] = '\0';
   hourlyTurns = turnsPerDay / 24;
-  calculatedStepDelay = max((turnDuration * 1000.0) / (stepsPerRevolution * 2), 5.0);
+  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
+  calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
 
   Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms, SSID=%s\n",
                 turnsPerDay, turnDuration, direction, calculatedStepDelay, ssid);
@@ -246,7 +259,7 @@ void setupWiFi() {
   WiFi.mode(WIFI_AP_STA);
   if (!WiFi.softAP(default_ssid, default_password)) {
     Serial.println("setupWiFi: Failed to start AP!");
-    while (true); // Halt for debugging
+    while (true);
   }
   Serial.println("setupWiFi: AP started: " + String(default_ssid) + ", IP: " + WiFi.softAPIP().toString());
   if (strlen(ssid) > 0 && strlen(password) >= 8) {
@@ -298,6 +311,14 @@ void setupWebServer() {
         NULL);
     server.send(200, "text/plain", "OTA check started.");
   });
+  server.on("/test_motor", HTTP_GET, []() {
+    Serial.println("test_motor: Running motor test...");
+    for (int i = 0; i < 8; i++) {
+      stepMotor(i);
+      delay(10);
+    }
+    server.send(200, "text/plain", "Motor test completed.");
+  });
   server.begin();
   Serial.println("setupWebServer: Web server started.");
 }
@@ -310,7 +331,8 @@ void handleSet() {
   if (turnDuration < 10.0 || turnDuration > 15.0) turnDuration = 15.0;
   if (direction < 1 || direction > 3) direction = 1;
   hourlyTurns = turnsPerDay / 24;
-  calculatedStepDelay = max((turnDuration * 1000.0) / (stepsPerRevolution * 2), 5.0);
+  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
+  calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
   Serial.printf("handleSet: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
                 turnsPerDay, turnDuration, direction, calculatedStepDelay);
   writeMotorSettings();
@@ -347,7 +369,7 @@ void handleSaveWiFi() {
   writeWiFiSettings();
   server.send(200, "text/plain", "OK");
   Serial.println("handleSaveWiFi: WiFi settings saved, restarting...");
-  delay(1000); // Allow response to be sent
+  delay(1000);
   ESP.restart();
 }
 
@@ -360,7 +382,8 @@ void resetMotor() {
   hourlyTurns = turnsPerDay / 24;
   currentStepIndex = 0;
   lastStepTime = millis();
-  calculatedStepDelay = max((turnDuration * 1000.0) / (stepsPerRevolution * 2), 5.0);
+  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
+  calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
   Serial.printf("resetMotor: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
                 turnsPerDay, turnDuration, direction, calculatedStepDelay);
   writeMotorSettings();
@@ -515,6 +538,7 @@ String htmlPage() {
                 <button onclick="sendCommand('start')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Başlat</button>
                 <button onclick="sendCommand('stop')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Durdur</button>
                 <button onclick="sendCommand('reset')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Ayarları Sıfırla</button>
+                <button onclick="testMotor()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Motor Test</button>
             </div>
         </div>
 
@@ -553,10 +577,10 @@ String htmlPage() {
             <h3 class="text-lg font-semibold text-center">Pin Bağlantıları</h3>
             <p class="text-sm text-center">Eğer motor dönmüyorsa, pin bağlantılarını kontrol edin.</p>
             <ul class="list-disc list-inside text-sm mx-auto w-fit">
-                <li>IN1 (Motor Kablosu 1) -> ESP32 Pini 26</li>
-                <li>IN2 (Motor Kablosu 2) -> ESP32 Pini 27</li>
-                <li>IN3 (Motor Kablosu 3) -> ESP32 Pini 14</li>
-                <li>IN4 (Motor Kablosu 4) -> ESP32 Pini 12</li>
+                <li>IN1 (Motor Kablosu 1) -> ESP32 Pini 17</li>
+                <li>IN2 (Motor Kablosu 2) -> ESP32 Pini 5</li>
+                <li>IN3 (Motor Kablosu 3) -> ESP32 Pini 18</li>
+                <li>IN4 (Motor Kablosu 4) -> ESP32 Pini 19</li>
             </ul>
         </div>
 
@@ -585,8 +609,6 @@ String htmlPage() {
                 const currentSSIDElement = document.getElementById('currentSSID');
                 const connectionStatusElement = document.getElementById('connectionStatus');
                 const motorStatusElement = document.getElementById('motor_status');
-                const checkUpdateButton = document.getElementById('checkUpdateButton');
-                const installUpdateButton = document.getElementById('installUpdateButton');
 
                 if (data.status) {
                     statusElement.innerText = data.status;
@@ -610,8 +632,8 @@ String htmlPage() {
                                                   data.otaStatus.includes("Yeni sürüm") ? 'orange' : 'red';
                 }
                 if (data.updateAvailable != null) {
-                    checkUpdateButton.classList.toggle('hidden', data.updateAvailable);
-                    installUpdateButton.classList.toggle('hidden', !data.updateAvailable);
+                    document.getElementById('checkUpdateButton').classList.toggle('hidden', data.updateAvailable);
+                    document.getElementById('installUpdateButton').classList.toggle('hidden', !data.updateAvailable);
                 }
                 if (data.customName != null) deviceNameElement.innerText = data.customName;
                 if (data.currentSSID != null) currentSSIDElement.innerText = data.currentSSID;
@@ -657,6 +679,19 @@ String htmlPage() {
                 .catch(error => {
                     console.error('Hata:', error);
                     showMessage('Komut gönderilirken hata oluştu.', 'error');
+                });
+        }
+
+        function testMotor() {
+            fetch('/test_motor')
+                .then(response => response.text())
+                .then(data => {
+                    console.log(data);
+                    showMessage('Motor testi tamamlandı.');
+                })
+                .catch(error => {
+                    console.error('Hata:', error);
+                    showMessage('Motor testi başlatılamadı.', 'error');
                 });
         }
 
