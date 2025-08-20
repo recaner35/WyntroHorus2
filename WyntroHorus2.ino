@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.24";
+const char* FIRMWARE_VERSION = "v1.0.25";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -128,8 +128,7 @@ void stepMotor(int step) {
   digitalWrite(IN2, steps[step][1] ? HIGH : LOW);
   digitalWrite(IN3, steps[step][2] ? HIGH : LOW);
   digitalWrite(IN4, steps[step][3] ? HIGH : LOW);
-  Serial.printf("stepMotor: Step %d, Pins: %d %d %d %d\n",
-                step, steps[step][0], steps[step][1], steps[step][2], steps[step][3]);
+  Serial.printf("stepMotor: Step %d\n", step);
 }
 
 void stopMotor() {
@@ -141,7 +140,7 @@ void stopMotor() {
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, LOW);
-  Serial.println("stopMotor: Motor stopped, all pins LOW.");
+  Serial.println("stopMotor: Motor stopped.");
   StaticJsonDocument<256> doc;
   doc["motorStatus"] = "Motor durduruldu.";
   String json;
@@ -169,7 +168,6 @@ void runMotorTask(void *parameter) {
   for (;;) {
     if (running) {
       if (millis() - lastStepTime >= calculatedStepDelay) {
-        // Ramp calculation
         float currentDelay = calculatedStepDelay;
         if (stepCount < rampSteps) {
           currentDelay = map(stepCount, 0, rampSteps, maxStepDelay, calculatedStepDelay);
@@ -228,8 +226,8 @@ void readSettings() {
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
 
-  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms, SSID=%s\n",
-                turnsPerDay, turnDuration, direction, calculatedStepDelay, ssid);
+  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
+                turnsPerDay, turnDuration, direction, calculatedStepDelay);
 }
 
 void writeMotorSettings() {
@@ -310,14 +308,6 @@ void setupWebServer() {
         1,
         NULL);
     server.send(200, "text/plain", "OTA check started.");
-  });
-  server.on("/test_motor", HTTP_GET, []() {
-    Serial.println("test_motor: Running motor test...");
-    for (int i = 0; i < 8; i++) {
-      stepMotor(i);
-      delay(10);
-    }
-    server.send(200, "text/plain", "Motor test completed.");
   });
   server.begin();
   Serial.println("setupWebServer: Web server started.");
@@ -468,7 +458,7 @@ void updateWebSocket() {
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
-  Serial.println("updateWebSocket: Sent: " + json);
+  Serial.println("updateWebSocket: Sent update.");
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
@@ -538,7 +528,6 @@ String htmlPage() {
                 <button onclick="sendCommand('start')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Başlat</button>
                 <button onclick="sendCommand('stop')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Durdur</button>
                 <button onclick="sendCommand('reset')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Ayarları Sıfırla</button>
-                <button onclick="testMotor()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Motor Test</button>
             </div>
         </div>
 
@@ -573,15 +562,6 @@ String htmlPage() {
                 <button id="checkUpdateButton" onclick="checkUpdate()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Güncellemeleri Kontrol Et</button>
                 <button id="installUpdateButton" onclick="installUpdate()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200 hidden">Güncellemeyi Yükle</button>
             </div>
-            <hr class="my-4">
-            <h3 class="text-lg font-semibold text-center">Pin Bağlantıları</h3>
-            <p class="text-sm text-center">Eğer motor dönmüyorsa, pin bağlantılarını kontrol edin.</p>
-            <ul class="list-disc list-inside text-sm mx-auto w-fit">
-                <li>IN1 (Motor Kablosu 1) -> ESP32 Pini 17</li>
-                <li>IN2 (Motor Kablosu 2) -> ESP32 Pini 5</li>
-                <li>IN3 (Motor Kablosu 3) -> ESP32 Pini 18</li>
-                <li>IN4 (Motor Kablosu 4) -> ESP32 Pini 19</li>
-            </ul>
         </div>
 
         <p id="motor_status" class="text-center mt-4 text-sm font-semibold"></p>
@@ -679,19 +659,6 @@ String htmlPage() {
                 .catch(error => {
                     console.error('Hata:', error);
                     showMessage('Komut gönderilirken hata oluştu.', 'error');
-                });
-        }
-
-        function testMotor() {
-            fetch('/test_motor')
-                .then(response => response.text())
-                .then(data => {
-                    console.log(data);
-                    showMessage('Motor testi tamamlandı.');
-                })
-                .catch(error => {
-                    console.error('Hata:', error);
-                    showMessage('Motor testi başlatılamadı.', 'error');
                 });
         }
 
