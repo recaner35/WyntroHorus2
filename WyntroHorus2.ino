@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.23"; // Güncellenen firmware sürümü
+const char* FIRMWARE_VERSION = "v1.0.23";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -22,7 +22,7 @@ char mDNS_hostname[32] = "";
 
 // Motor Settings
 int turnsPerDay = 600;
-float turnDuration = 15.0; 
+float turnDuration = 15.0;
 int direction = 1;
 bool running = false;
 int completedTurns = 0;
@@ -31,7 +31,7 @@ int hourlyTurns = turnsPerDay / 24;
 static int currentStepIndex = 0;
 static unsigned long lastStepTime = 0;
 static bool forward = true;
-float calculatedStepDelay = 0; // Motor adım gecikmesini hesaplamak için değişken
+float calculatedStepDelay = 0;
 
 // Pin Definitions
 const int motorPin1 = 26; // IN1
@@ -40,28 +40,24 @@ const int motorPin3 = 14; // IN3
 const int motorPin4 = 12; // IN4
 const int stepsPerRevolution = 2048;
 
-// Stepper motor adımlama dizisi (ULN2003 sürücü için en yaygın half-step)
-// Bu dizi, her bir adımda hangi pinlerin HIGH olacağını belirler.
-// 8 adımlık dizi, daha yumuşak ve kararlı dönüş sağlar.
+// Stepper motor step sequence (half-step for ULN2003)
 const int stepSequence[8][4] = {
-    {1, 0, 0, 0}, // Adım 0: IN1 HIGH
-    {1, 1, 0, 0}, // Adım 1: IN1, IN2 HIGH
-    {0, 1, 0, 0}, // Adım 2: IN2 HIGH
-    {0, 1, 1, 0}, // Adım 3: IN2, IN3 HIGH
-    {0, 0, 1, 0}, // Adım 4: IN3 HIGH
-    {0, 0, 1, 1}, // Adım 5: IN3, IN4 HIGH
-    {0, 0, 0, 1}, // Adım 6: IN4 HIGH
-    {1, 0, 0, 1}  // Adım 7: IN4, IN1 HIGH
+    {1, 0, 0, 0}, // Step 0
+    {1, 1, 0, 0}, // Step 1
+    {0, 1, 0, 0}, // Step 2
+    {0, 1, 1, 0}, // Step 3
+    {0, 0, 1, 0}, // Step 4
+    {0, 0, 1, 1}, // Step 5
+    {0, 0, 0, 1}, // Step 6
+    {1, 0, 0, 1}  // Step 7
 };
 
 // Global Objects
 WebServer server(80);
 WebSocketsServer webSocket(81);
-
-// Motor kontrolü için görev kolu (task handle)
 TaskHandle_t motorTaskHandle = NULL;
 
-// Fonksiyon prototipleri
+// Function prototypes
 void readSettings();
 void writeMotorSettings();
 void writeWiFiSettings();
@@ -73,7 +69,7 @@ void handleScan();
 void handleSaveWiFi();
 void stopMotor();
 void startMotor();
-void runMotorTask(void *parameter); // Yeni motor kontrol görevi
+void runMotorTask(void *parameter);
 void stepMotor(int step);
 void checkHourlyReset();
 void resetMotor();
@@ -90,6 +86,7 @@ void setup() {
   pinMode(motorPin2, OUTPUT);
   pinMode(motorPin3, OUTPUT);
   pinMode(motorPin4, OUTPUT);
+  stopMotor(); // Ensure motor pins are LOW at startup
   readSettings();
   setupWiFi();
   setupMDNS();
@@ -98,7 +95,6 @@ void setup() {
   webSocket.onEvent(webSocketEvent);
   ElegantOTA.begin(&server);
 
-  // OTA Event Handling for better debugging
   ElegantOTA.onStart([]() {
     stopMotor();
     Serial.println("OTA started, motor stopped.");
@@ -111,15 +107,15 @@ void setup() {
     }
   });
 
-  // Başlangıçta motor görevini oluştur
+  // Create motor task
   xTaskCreatePinnedToCore(
       runMotorTask,
       "MotorTask",
-      2048, // Stack size
+      4096, // Increased stack size
       NULL,
-      1,    // Priority
+      1,
       &motorTaskHandle,
-      0);   // Core 0'da çalıştır
+      0);
 }
 
 void loop() {
@@ -130,57 +126,72 @@ void loop() {
 }
 
 void stepMotor(int step) {
-  // Motor adımı
   digitalWrite(motorPin1, stepSequence[step][0] ? HIGH : LOW);
   digitalWrite(motorPin2, stepSequence[step][1] ? HIGH : LOW);
   digitalWrite(motorPin3, stepSequence[step][2] ? HIGH : LOW);
   digitalWrite(motorPin4, stepSequence[step][3] ? HIGH : LOW);
+  Serial.printf("stepMotor: Step %d, Pins: %d %d %d %d\n",
+                step,
+                stepSequence[step][0],
+                stepSequence[step][1],
+                stepSequence[step][2],
+                stepSequence[step][3]);
 }
 
 void stopMotor() {
-  // Motoru durdurmak için görevden çık
   running = false;
-  vTaskSuspend(motorTaskHandle);
+  if (motorTaskHandle != NULL) {
+    vTaskSuspend(motorTaskHandle);
+  }
   digitalWrite(motorPin1, LOW);
   digitalWrite(motorPin2, LOW);
   digitalWrite(motorPin3, LOW);
   digitalWrite(motorPin4, LOW);
-  Serial.println("Motor durduruldu.");
+  Serial.println("stopMotor: Motor stopped, all pins LOW.");
 }
 
 void startMotor() {
-  // Motoru başlatmak için görevi devam ettir
   running = true;
-  vTaskResume(motorTaskHandle);
-  Serial.println("Motor başlatıldı.");
+  calculatedStepDelay = max((turnDuration * 1000.0) / (stepsPerRevolution * 2), 5.0); // Minimum 5ms
+  Serial.printf("startMotor: Starting motor, stepDelay=%.2fms\n", calculatedStepDelay);
+  if (motorTaskHandle != NULL) {
+    vTaskResume(motorTaskHandle);
+  }
 }
 
 void runMotorTask(void *parameter) {
   for (;;) {
     if (running) {
-      // Yön kontrolü
-      if (direction == 1 || (direction == 3 && forward)) {
-        currentStepIndex = (currentStepIndex + 1) % 8; // Half-step için 8'e göre mod alıyoruz
-      } else {
-        currentStepIndex = (currentStepIndex - 1 + 8) % 8; // Geri adım
-      }
-      
-      stepMotor(currentStepIndex);
-      
-      // Toplam adım sayısını hesaplama (her 8 adımda bir devir tamamlanıyor)
-      if (currentStepIndex == 0) { // Her 8 adımda bir devir
-        completedTurns++;
-        if (direction == 3) forward = !forward;
-        updateWebSocket();
-        Serial.printf("Turn completed. Total turns: %d\n", completedTurns);
+      if (millis() - lastStepTime >= calculatedStepDelay) {
+        if (direction == 1 || (direction == 3 && forward)) {
+          currentStepIndex = (currentStepIndex + 1) % 8;
+        } else {
+          currentStepIndex = (currentStepIndex - 1 + 8) % 8;
+        }
+        stepMotor(currentStepIndex);
+        lastStepTime = millis();
+
+        static int stepCount = 0;
+        stepCount++;
+        if (stepCount >= stepsPerRevolution) { // Full revolution
+          stepCount = 0;
+          completedTurns++;
+          if (direction == 3) forward = !forward;
+          Serial.printf("runMotorTask: Turn completed, total turns: %d\n", completedTurns);
+          StaticJsonDocument<256> doc;
+          doc["motorStatus"] = "Motor çalışıyor, tur: " + String(completedTurns);
+          String json;
+          serializeJson(doc, json);
+          webSocket.broadcastTXT(json);
+          updateWebSocket();
+        }
       }
     }
-    vTaskDelay(pdMS_TO_TICKS(calculatedStepDelay));
+    vTaskDelay(pdMS_TO_TICKS(1)); // Prevent task from hogging CPU
   }
 }
 
 void readSettings() {
-  EEPROM.begin(512);
   int address = 0;
   EEPROM.readBytes(address, ssid, sizeof(ssid));
   address += sizeof(ssid);
@@ -193,14 +204,19 @@ void readSettings() {
   EEPROM.get(address, turnDuration);
   address += sizeof(turnDuration);
   EEPROM.get(address, direction);
-  
-  if (turnsPerDay < 600 || turnsPerDay > 1200) turnsPerDay = 600;
-  if (turnDuration < 10.0 || turnDuration > 15.0) turnDuration = 15.0;
+
+  // Validate settings
+  if (turnsPerDay < 600 || turnsPerDay > 1200 || isnan(turnsPerDay)) turnsPerDay = 600;
+  if (turnDuration < 10.0 || turnDuration > 15.0 || isnan(turnDuration)) turnDuration = 15.0;
   if (direction < 1 || direction > 3) direction = 1;
+  if (strlen(ssid) > 31) ssid[0] = '\0';
+  if (strlen(password) > 63) password[0] = '\0';
+  if (strlen(custom_name) > 20) custom_name[0] = '\0';
   hourlyTurns = turnsPerDay / 24;
-  
-  calculatedStepDelay = (turnDuration * 1000.0) / (stepsPerRevolution * 2); // Half-step için 2 ile çarptık
-  Serial.printf("Ayarlar okundu: TPD=%d, Süre=%.2f, Yön=%d, Adım Gecikmesi=%.2f ms\n", turnsPerDay, turnDuration, direction, calculatedStepDelay);
+  calculatedStepDelay = max((turnDuration * 1000.0) / (stepsPerRevolution * 2), 5.0);
+
+  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms, SSID=%s\n",
+                turnsPerDay, turnDuration, direction, calculatedStepDelay, ssid);
 }
 
 void writeMotorSettings() {
@@ -211,7 +227,7 @@ void writeMotorSettings() {
   address += sizeof(turnDuration);
   EEPROM.put(address, direction);
   EEPROM.commit();
-  Serial.printf("Motor ayarları kaydedildi: TPD=%d, Süre=%.2f, Yön=%d\n", turnsPerDay, turnDuration, direction);
+  Serial.printf("writeMotorSettings: TPD=%d, Duration=%.2f, Direction=%d\n", turnsPerDay, turnDuration, direction);
 }
 
 void writeWiFiSettings() {
@@ -222,14 +238,18 @@ void writeWiFiSettings() {
   address += sizeof(password);
   EEPROM.put(address, custom_name);
   EEPROM.commit();
-  Serial.println("WiFi ayarları kaydedildi, yeniden başlatılıyor...");
+  Serial.println("writeWiFiSettings: WiFi settings saved, restarting...");
 }
 
 void setupWiFi() {
+  Serial.println("setupWiFi: Initializing...");
   WiFi.mode(WIFI_AP_STA);
-  WiFi.softAP(default_ssid, default_password);
-  Serial.println("AP başlatıldı: " + String(default_ssid));
-  if (strlen(ssid) > 0 && strlen(password) > 0) {
+  if (!WiFi.softAP(default_ssid, default_password)) {
+    Serial.println("setupWiFi: Failed to start AP!");
+    while (true); // Halt for debugging
+  }
+  Serial.println("setupWiFi: AP started: " + String(default_ssid) + ", IP: " + WiFi.softAPIP().toString());
+  if (strlen(ssid) > 0 && strlen(password) >= 8) {
     WiFi.begin(ssid, password);
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 20) {
@@ -238,16 +258,18 @@ void setupWiFi() {
       attempts++;
     }
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nWiFi'ye bağlandı: " + String(ssid) + ", IP: " + WiFi.localIP().toString());
+      Serial.println("\nsetupWiFi: Connected to " + String(ssid) + ", IP: " + WiFi.localIP().toString());
     } else {
-      Serial.println("\nWiFi bağlantısı başarısız, AP modunda devam ediliyor.");
+      Serial.println("\nsetupWiFi: Connection failed, continuing in AP mode.");
     }
+  } else {
+    Serial.println("setupWiFi: Invalid WiFi credentials, running in AP mode only.");
   }
 }
 
 void setupMDNS() {
   strcpy(mDNS_hostname, "horus");
-  if (strlen(custom_name) > 0) {
+  if (strlen(custom_name) > 0 && strlen(custom_name) <= 20) {
     strncat(mDNS_hostname, custom_name, sizeof(mDNS_hostname) - strlen(mDNS_hostname) - 1);
   } else {
     String mac = WiFi.macAddress();
@@ -255,7 +277,9 @@ void setupMDNS() {
     strncat(mDNS_hostname, mac.c_str() + 8, sizeof(mDNS_hostname) - strlen(mDNS_hostname) - 1);
   }
   if (MDNS.begin(mDNS_hostname)) {
-    Serial.println("mDNS başlatıldı: " + String(mDNS_hostname) + ".local");
+    Serial.println("setupMDNS: Started: " + String(mDNS_hostname) + ".local");
+  } else {
+    Serial.println("setupMDNS: Failed to start!");
   }
 }
 
@@ -266,16 +290,16 @@ void setupWebServer() {
   server.on("/save_wifi", HTTP_POST, handleSaveWiFi);
   server.on("/check_update", HTTP_GET, []() {
     xTaskCreate(
-      checkOTAUpdateTask,
-      "CheckOTAUpdateTask",
-      4096,
-      NULL,
-      1,
-      NULL);
-    server.send(200, "text/plain", "OTA kontrolü başlatıldı.");
+        checkOTAUpdateTask,
+        "CheckOTAUpdateTask",
+        4096,
+        NULL,
+        1,
+        NULL);
+    server.send(200, "text/plain", "OTA check started.");
   });
   server.begin();
-  Serial.println("Web sunucusu başlatıldı.");
+  Serial.println("setupWebServer: Web server started.");
 }
 
 void handleSet() {
@@ -286,17 +310,18 @@ void handleSet() {
   if (turnDuration < 10.0 || turnDuration > 15.0) turnDuration = 15.0;
   if (direction < 1 || direction > 3) direction = 1;
   hourlyTurns = turnsPerDay / 24;
-  
-  calculatedStepDelay = (turnDuration * 1000.0) / (stepsPerRevolution * 2);
-  Serial.printf("Yeni ayarlar: TPD=%d, Süre=%.2f, Yön=%d, Adım Gecikmesi=%.2f ms\n", turnsPerDay, turnDuration, direction, calculatedStepDelay);
-
+  calculatedStepDelay = max((turnDuration * 1000.0) / (stepsPerRevolution * 2), 5.0);
+  Serial.printf("handleSet: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
+                turnsPerDay, turnDuration, direction, calculatedStepDelay);
   writeMotorSettings();
   if (server.hasArg("action")) {
-    if (server.arg("action") == "start") {
+    String action = server.arg("action");
+    Serial.println("handleSet: Action=" + action);
+    if (action == "start") {
       startMotor();
-    } else if (server.arg("action") == "stop") {
+    } else if (action == "stop") {
       stopMotor();
-    } else if (server.arg("action") == "reset") {
+    } else if (action == "reset") {
       resetMotor();
     }
   }
@@ -311,7 +336,7 @@ void handleScan() {
     String ssid_scan = WiFi.SSID(i);
     options += "<option value=\"" + ssid_scan + "\">" + ssid_scan + " (RSSI: " + String(WiFi.RSSI(i)) + " dBm)</option>";
   }
-  Serial.println("WiFi taraması tamamlandı: " + String(n) + " ağ bulundu.");
+  Serial.println("handleScan: WiFi scan completed, found " + String(n) + " networks.");
   server.send(200, "text/plain", options);
 }
 
@@ -321,7 +346,8 @@ void handleSaveWiFi() {
   if (server.hasArg("name")) strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name));
   writeWiFiSettings();
   server.send(200, "text/plain", "OK");
-  Serial.println("WiFi ayarları kaydedildi, cihaz yeniden başlatılıyor...");
+  Serial.println("handleSaveWiFi: WiFi settings saved, restarting...");
+  delay(1000); // Allow response to be sent
   ESP.restart();
 }
 
@@ -334,54 +360,47 @@ void resetMotor() {
   hourlyTurns = turnsPerDay / 24;
   currentStepIndex = 0;
   lastStepTime = millis();
-  
-  calculatedStepDelay = (turnDuration * 1000.0) / (stepsPerRevolution * 2);
-  Serial.printf("Motor ayarları sıfırlandı: TPD=%d, Süre=%.2f, Yön=%d, Adım Gecikmesi=%.2f ms\n", turnsPerDay, turnDuration, direction, calculatedStepDelay);
-
+  calculatedStepDelay = max((turnDuration * 1000.0) / (stepsPerRevolution * 2), 5.0);
+  Serial.printf("resetMotor: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
+                turnsPerDay, turnDuration, direction, calculatedStepDelay);
   writeMotorSettings();
   updateWebSocket();
-  Serial.println("Motor ayarları sıfırlandı.");
 }
 
 void checkHourlyReset() {
   unsigned long currentTime = millis();
-  if (currentTime - lastHourTime >= 3600000) { // 1 saat (3,600,000 ms)
+  if (currentTime - lastHourTime >= 3600000) {
     completedTurns = 0;
     lastHourTime = currentTime;
     updateWebSocket();
+    Serial.println("checkHourlyReset: Hourly reset, completedTurns=0");
   }
 }
 
 bool isNewVersionAvailable(String latest, String current) {
-    latest.replace("v", "");
-    current.replace("v", "");
-    
-    int latestMajor = 0, latestMinor = 0, latestPatch = 0;
-    int currentMajor = 0, currentMinor = 0, currentPatch = 0;
-    
-    sscanf(latest.c_str(), "%d.%d.%d", &latestMajor, &latestMinor, &latestPatch);
-    sscanf(current.c_str(), "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch);
-    
-    if (latestMajor > currentMajor) return true;
-    if (latestMajor < currentMajor) return false;
-    if (latestMinor > currentMinor) return true;
-    if (latestMinor < currentMinor) return false;
-    if (latestPatch > currentPatch) return true;
-    
-    return false;
+  latest.replace("v", "");
+  current.replace("v", "");
+  int latestMajor = 0, latestMinor = 0, latestPatch = 0;
+  int currentMajor = 0, currentMinor = 0, currentPatch = 0;
+  sscanf(latest.c_str(), "%d.%d.%d", &latestMajor, &latestMinor, &latestPatch);
+  sscanf(current.c_str(), "%d.%d.%d", &currentMajor, &currentMinor, &currentPatch);
+  if (latestMajor > currentMajor) return true;
+  if (latestMajor < currentMajor) return false;
+  if (latestMinor > currentMinor) return true;
+  if (latestMinor < currentMinor) return false;
+  if (latestPatch > currentPatch) return true;
+  return false;
 }
 
 void checkOTAUpdateTask(void *parameter) {
-  Serial.println("checkOTAUpdateTask başlatıldı.");
+  Serial.println("checkOTAUpdateTask: Started.");
   HTTPClient http;
   http.setTimeout(10000);
   http.begin(github_url);
   http.addHeader("Accept", "application/vnd.github.v3+json");
   int httpCode = http.GET();
   StaticJsonDocument<256> statusDoc;
-  
   statusDoc["updateAvailable"] = false;
-
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
     StaticJsonDocument<1024> doc;
@@ -389,7 +408,6 @@ void checkOTAUpdateTask(void *parameter) {
     if (!error) {
       String latestVersion = doc["tag_name"].as<String>();
       String currentVersion = String(FIRMWARE_VERSION);
-
       if (isNewVersionAvailable(latestVersion, currentVersion)) {
         statusDoc["otaStatus"] = "Yeni sürüm mevcut: " + latestVersion;
         statusDoc["updateAvailable"] = true;
@@ -398,17 +416,17 @@ void checkOTAUpdateTask(void *parameter) {
       }
     } else {
       statusDoc["otaStatus"] = "OTA kontrol hatası: JSON parse error.";
-      Serial.println("JSON parse error: " + String(error.c_str()));
+      Serial.println("checkOTAUpdateTask: JSON parse error: " + String(error.c_str()));
     }
   } else {
     statusDoc["otaStatus"] = "OTA kontrol hatası: HTTP " + String(httpCode);
-    Serial.println("HTTP error: " + String(httpCode));
+    Serial.println("checkOTAUpdateTask: HTTP error: " + String(httpCode));
   }
   http.end();
   String json;
   serializeJson(statusDoc, json);
   webSocket.broadcastTXT(json);
-  Serial.println("checkOTAUpdateTask tamamlandı.");
+  Serial.println("checkOTAUpdateTask: Completed.");
   vTaskDelete(NULL);
 }
 
@@ -427,16 +445,16 @@ void updateWebSocket() {
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
-  Serial.println("WebSocket güncellendi: " + json);
+  Serial.println("updateWebSocket: Sent: " + json);
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
-      Serial.printf("WebSocket client [%u] bağlantısı kesildi\n", num);
+      Serial.printf("webSocketEvent: Client [%u] disconnected\n", num);
       break;
     case WStype_CONNECTED:
-      Serial.printf("WebSocket client [%u] bağlandı\n", num);
+      Serial.printf("webSocketEvent: Client [%u] connected\n", num);
       updateWebSocket();
       break;
     case WStype_TEXT:
@@ -476,7 +494,7 @@ String htmlPage() {
             <p class="text-center">Durum: <span id="status">Durduruldu</span> <span id="motor_spinner" class="hidden animate-spin-slow">🔄</span></p>
             <p class="text-center">Tamamlanan Turlar: <span id="completedTurns">0</span></p>
             <p class="text-center">Saatlik Turlar: <span id="hourlyTurns">0</span></p>
-
+            <p id="motor_status" class="text-center"></p>
             <div>
                 <label class="block text-sm font-medium">Günlük Tur Sayısı: <span id="tpd_val">600</span></label>
                 <input type="range" id="tpd" min="600" max="1200" value="600" oninput="tpd_val.innerText=this.value" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
@@ -493,7 +511,6 @@ String htmlPage() {
                     <option value="3">İkisi</option>
                 </select>
             </div>
-            
             <div class="flex justify-center space-x-2">
                 <button onclick="sendCommand('start')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Başlat</button>
                 <button onclick="sendCommand('stop')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Durdur</button>
@@ -517,7 +534,6 @@ String htmlPage() {
                 <label class="block text-sm font-medium">Cihaz Adı</label>
                 <input type="text" id="customName" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
             </div>
-
             <div class="flex justify-center space-x-2">
                 <button onclick="scanWiFi()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Ağları Tara</button>
                 <button onclick="saveWiFi()" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Kaydet & Yeniden Başlat</button>
@@ -544,17 +560,16 @@ String htmlPage() {
             </ul>
         </div>
 
+        <p id="motor_status" class="text-center mt-4 text-sm font-semibold"></p>
         <p id="message_box" class="text-center mt-4 text-sm font-semibold"></p>
     </div>
 
     <script>
         let ws = new WebSocket('ws://' + window.location.hostname + ':81/');
-        
         ws.onmessage = function(event) {
             console.log('WebSocket message received: ' + event.data);
             try {
                 let data = JSON.parse(event.data);
-                
                 const statusElement = document.getElementById('status');
                 const motorSpinnerElement = document.getElementById('motor_spinner');
                 const completedTurnsElement = document.getElementById('completedTurns');
@@ -569,6 +584,7 @@ String htmlPage() {
                 const deviceNameElement = document.getElementById('deviceName');
                 const currentSSIDElement = document.getElementById('currentSSID');
                 const connectionStatusElement = document.getElementById('connectionStatus');
+                const motorStatusElement = document.getElementById('motor_status');
                 const checkUpdateButton = document.getElementById('checkUpdateButton');
                 const installUpdateButton = document.getElementById('installUpdateButton');
 
@@ -588,29 +604,19 @@ String htmlPage() {
                 }
                 if (data.direction != null) dirElement.value = data.direction;
                 if (data.firmwareVersion) versionElement.innerText = data.firmwareVersion;
-                
                 if (data.otaStatus) {
                     otaStatusElement.innerText = data.otaStatus;
-                    if (data.otaStatus.includes("güncel")) {
-                        otaStatusElement.style.color = 'green';
-                    } else if (data.otaStatus.includes("Yeni sürüm")) {
-                        otaStatusElement.style.color = 'orange';
-                    } else {
-                        otaStatusElement.style.color = 'red';
-                    }
+                    otaStatusElement.style.color = data.otaStatus.includes("güncel") ? 'green' :
+                                                  data.otaStatus.includes("Yeni sürüm") ? 'orange' : 'red';
                 }
                 if (data.updateAvailable != null) {
-                    if (data.updateAvailable) {
-                        checkUpdateButton.classList.add('hidden');
-                        installUpdateButton.classList.remove('hidden');
-                    } else {
-                        checkUpdateButton.classList.remove('hidden');
-                        installUpdateButton.classList.add('hidden');
-                    }
+                    checkUpdateButton.classList.toggle('hidden', data.updateAvailable);
+                    installUpdateButton.classList.toggle('hidden', !data.updateAvailable);
                 }
                 if (data.customName != null) deviceNameElement.innerText = data.customName;
                 if (data.currentSSID != null) currentSSIDElement.innerText = data.currentSSID;
                 if (data.connectionStatus != null) connectionStatusElement.innerText = data.connectionStatus;
+                if (data.motorStatus) motorStatusElement.innerText = data.motorStatus;
             } catch (e) {
                 console.error("JSON parse error:", e);
                 console.log("Received data:", event.data);
@@ -621,11 +627,9 @@ String htmlPage() {
             const tabs = document.querySelectorAll('.tab-content');
             tabs.forEach(tab => tab.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
-            
             const buttons = document.querySelectorAll('.tab-button');
             buttons.forEach(btn => btn.classList.remove('bg-blue-500', 'hover:bg-blue-600'));
             buttons.forEach(btn => btn.classList.add('bg-gray-500', 'hover:bg-gray-600'));
-            
             const activeTabButton = document.querySelector(`[onclick="openTab('${tabName}')"]`);
             if (activeTabButton) {
                 activeTabButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
@@ -637,9 +641,7 @@ String htmlPage() {
             const messageBox = document.getElementById('message_box');
             messageBox.innerText = msg;
             messageBox.style.color = type === 'error' ? 'red' : 'green';
-            setTimeout(() => {
-                messageBox.innerText = '';
-            }, 5000);
+            setTimeout(() => { messageBox.innerText = ''; }, 5000);
         }
 
         function sendCommand(action) {
@@ -657,7 +659,7 @@ String htmlPage() {
                     showMessage('Komut gönderilirken hata oluştu.', 'error');
                 });
         }
-        
+
         function scanWiFi() {
             fetch('/scan')
                 .then(response => response.text())
@@ -698,9 +700,7 @@ String htmlPage() {
             document.getElementById('installUpdateButton').classList.add('hidden');
             fetch('/check_update')
                 .then(response => response.text())
-                .then(data => {
-                    console.log(data);
-                })
+                .then(data => { console.log(data); })
                 .catch(error => {
                     console.error('Hata:', error);
                     showMessage('Güncelleme kontrolü başlatılamadı.', 'error');
@@ -708,11 +708,9 @@ String htmlPage() {
         }
 
         function installUpdate() {
-            // Yönlendirme
             window.location.href = "/update";
         }
-        
-        // Yüklendiğinde motor sekmesini aç
+
         window.onload = function() {
             openTab('motor');
         }
