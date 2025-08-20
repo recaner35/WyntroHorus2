@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.22"; // Güncellenen firmware sürümü
+const char* FIRMWARE_VERSION = "v1.0.23"; // Güncellenen firmware sürümü
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -28,17 +28,31 @@ bool running = false;
 int completedTurns = 0;
 unsigned long lastHourTime = 0;
 int hourlyTurns = turnsPerDay / 24;
-static int currentStep = 0;
+static int currentStepIndex = 0;
 static unsigned long lastStepTime = 0;
 static bool forward = true;
 float calculatedStepDelay = 0; // Motor adım gecikmesini hesaplamak için değişken
 
 // Pin Definitions
-const int motorPin1 = 26;
-const int motorPin2 = 27;
-const int motorPin3 = 14;
-const int motorPin4 = 12;
+const int motorPin1 = 26; // IN1
+const int motorPin2 = 27; // IN2
+const int motorPin3 = 14; // IN3
+const int motorPin4 = 12; // IN4
 const int stepsPerRevolution = 2048;
+
+// Stepper motor adımlama dizisi (ULN2003 sürücü için en yaygın half-step)
+// Bu dizi, her bir adımda hangi pinlerin HIGH olacağını belirler.
+// 8 adımlık dizi, daha yumuşak ve kararlı dönüş sağlar.
+const int stepSequence[8][4] = {
+    {1, 0, 0, 0}, // Adım 0: IN1 HIGH
+    {1, 1, 0, 0}, // Adım 1: IN1, IN2 HIGH
+    {0, 1, 0, 0}, // Adım 2: IN2 HIGH
+    {0, 1, 1, 0}, // Adım 3: IN2, IN3 HIGH
+    {0, 0, 1, 0}, // Adım 4: IN3 HIGH
+    {0, 0, 1, 1}, // Adım 5: IN3, IN4 HIGH
+    {0, 0, 0, 1}, // Adım 6: IN4 HIGH
+    {1, 0, 0, 1}  // Adım 7: IN4, IN1 HIGH
+};
 
 // Global Objects
 WebServer server(80);
@@ -117,10 +131,10 @@ void loop() {
 
 void stepMotor(int step) {
   // Motor adımı
-  digitalWrite(motorPin1, step == 0 ? HIGH : LOW);
-  digitalWrite(motorPin2, step == 1 ? HIGH : LOW);
-  digitalWrite(motorPin3, step == 2 ? HIGH : LOW);
-  digitalWrite(motorPin4, step == 3 ? HIGH : LOW);
+  digitalWrite(motorPin1, stepSequence[step][0] ? HIGH : LOW);
+  digitalWrite(motorPin2, stepSequence[step][1] ? HIGH : LOW);
+  digitalWrite(motorPin3, stepSequence[step][2] ? HIGH : LOW);
+  digitalWrite(motorPin4, stepSequence[step][3] ? HIGH : LOW);
 }
 
 void stopMotor() {
@@ -144,14 +158,17 @@ void startMotor() {
 void runMotorTask(void *parameter) {
   for (;;) {
     if (running) {
+      // Yön kontrolü
       if (direction == 1 || (direction == 3 && forward)) {
-        stepMotor(currentStep % 4);
+        currentStepIndex = (currentStepIndex + 1) % 8; // Half-step için 8'e göre mod alıyoruz
       } else {
-        stepMotor(3 - (currentStep % 4));
+        currentStepIndex = (currentStepIndex - 1 + 8) % 8; // Geri adım
       }
-      currentStep++;
-      if (currentStep >= stepsPerRevolution) {
-        currentStep = 0;
+      
+      stepMotor(currentStepIndex);
+      
+      // Toplam adım sayısını hesaplama (her 8 adımda bir devir tamamlanıyor)
+      if (currentStepIndex == 0) { // Her 8 adımda bir devir
         completedTurns++;
         if (direction == 3) forward = !forward;
         updateWebSocket();
@@ -182,7 +199,7 @@ void readSettings() {
   if (direction < 1 || direction > 3) direction = 1;
   hourlyTurns = turnsPerDay / 24;
   
-  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerRevolution;
+  calculatedStepDelay = (turnDuration * 1000.0) / (stepsPerRevolution * 2); // Half-step için 2 ile çarptık
   Serial.printf("Ayarlar okundu: TPD=%d, Süre=%.2f, Yön=%d, Adım Gecikmesi=%.2f ms\n", turnsPerDay, turnDuration, direction, calculatedStepDelay);
 }
 
@@ -270,7 +287,7 @@ void handleSet() {
   if (direction < 1 || direction > 3) direction = 1;
   hourlyTurns = turnsPerDay / 24;
   
-  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerRevolution;
+  calculatedStepDelay = (turnDuration * 1000.0) / (stepsPerRevolution * 2);
   Serial.printf("Yeni ayarlar: TPD=%d, Süre=%.2f, Yön=%d, Adım Gecikmesi=%.2f ms\n", turnsPerDay, turnDuration, direction, calculatedStepDelay);
 
   writeMotorSettings();
@@ -315,10 +332,10 @@ void resetMotor() {
   direction = 1;
   completedTurns = 0;
   hourlyTurns = turnsPerDay / 24;
-  currentStep = 0;
+  currentStepIndex = 0;
   lastStepTime = millis();
   
-  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerRevolution;
+  calculatedStepDelay = (turnDuration * 1000.0) / (stepsPerRevolution * 2);
   Serial.printf("Motor ayarları sıfırlandı: TPD=%d, Süre=%.2f, Yön=%d, Adım Gecikmesi=%.2f ms\n", turnsPerDay, turnDuration, direction, calculatedStepDelay);
 
   writeMotorSettings();
@@ -516,6 +533,15 @@ String htmlPage() {
                 <button id="checkUpdateButton" onclick="checkUpdate()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Güncellemeleri Kontrol Et</button>
                 <button id="installUpdateButton" onclick="installUpdate()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200 hidden">Güncellemeyi Yükle</button>
             </div>
+            <hr class="my-4">
+            <h3 class="text-lg font-semibold text-center">Pin Bağlantıları</h3>
+            <p class="text-sm text-center">Eğer motor dönmüyorsa, pin bağlantılarını kontrol edin.</p>
+            <ul class="list-disc list-inside text-sm mx-auto w-fit">
+                <li>IN1 (Motor Kablosu 1) -> ESP32 Pini 26</li>
+                <li>IN2 (Motor Kablosu 2) -> ESP32 Pini 27</li>
+                <li>IN3 (Motor Kablosu 3) -> ESP32 Pini 14</li>
+                <li>IN4 (Motor Kablosu 4) -> ESP32 Pini 12</li>
+            </ul>
         </div>
 
         <p id="message_box" class="text-center mt-4 text-sm font-semibold"></p>
