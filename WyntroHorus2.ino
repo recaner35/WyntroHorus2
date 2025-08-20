@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.19"; // Updated firmware version
+const char* FIRMWARE_VERSION = "v1.0.20"; // Updated firmware version
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -137,9 +137,9 @@ void runMotor() {
 
 void readSettings() {
   EEPROM.begin(512);
-  EEPROM.readBytes(ssid, sizeof(ssid));
-  EEPROM.readBytes(password, sizeof(password));
-  EEPROM.readBytes(custom_name, sizeof(custom_name));
+  EEPROM.readBytes(0, ssid, sizeof(ssid)); // Düzeltildi
+  EEPROM.readBytes(32, password, sizeof(password)); // Düzeltildi
+  EEPROM.readBytes(64, custom_name, sizeof(custom_name)); // Düzeltildi
   EEPROM.get(100, turnsPerDay);
   EEPROM.get(104, turnDuration);
   EEPROM.get(108, direction);
