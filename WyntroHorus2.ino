@@ -1,3 +1,4 @@
+```cpp
 #include <WiFi.h>
 #include <WebServer.h>
 #include <FS.h>
@@ -10,7 +11,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.25";
+const char* FIRMWARE_VERSION = "v1.0.26";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -70,6 +71,7 @@ void stopMotor();
 void startMotor();
 void runMotorTask(void *parameter);
 void stepMotor(int step);
+float calculateStepDelay(int stepIndex, float baseDelay);
 void checkHourlyReset();
 void resetMotor();
 void updateWebSocket();
@@ -132,14 +134,14 @@ void stepMotor(int step) {
 }
 
 void stopMotor() {
-  running = false;
-  if (motorTaskHandle != NULL) {
-    vTaskSuspend(motorTaskHandle);
-  }
   digitalWrite(IN1, LOW);
   digitalWrite(IN2, LOW);
   digitalWrite(IN3, LOW);
   digitalWrite(IN4, LOW);
+  running = false;
+  if (motorTaskHandle != NULL) {
+    vTaskSuspend(motorTaskHandle);
+  }
   Serial.println("stopMotor: Motor stopped.");
   StaticJsonDocument<256> doc;
   doc["motorStatus"] = "Motor durduruldu.";
@@ -163,18 +165,22 @@ void startMotor() {
   webSocket.broadcastTXT(json);
 }
 
+float calculateStepDelay(int stepIndex, float baseDelay) {
+  if (stepIndex < rampSteps) {
+    float progress = (float)stepIndex / rampSteps;
+    return maxStepDelay - (maxStepDelay - baseDelay) * progress;
+  } else if (stepIndex >= stepsPerTurn - rampSteps) {
+    float progress = (float)(stepsPerTurn - stepIndex) / rampSteps;
+    return maxStepDelay - (maxStepDelay - baseDelay) * progress;
+  }
+  return baseDelay;
+}
+
 void runMotorTask(void *parameter) {
   static int stepCount = 0;
   for (;;) {
     if (running) {
-      if (millis() - lastStepTime >= calculatedStepDelay) {
-        float currentDelay = calculatedStepDelay;
-        if (stepCount < rampSteps) {
-          currentDelay = map(stepCount, 0, rampSteps, maxStepDelay, calculatedStepDelay);
-        } else if (stepCount >= stepsPerTurn - rampSteps) {
-          currentDelay = map(stepCount, stepsPerTurn - rampSteps, stepsPerTurn, calculatedStepDelay, maxStepDelay);
-        }
-
+      if (millis() - lastStepTime >= calculateStepDelay(stepCount, calculatedStepDelay)) {
         if (direction == 1 || (direction == 3 && forward)) {
           currentStepIndex = (currentStepIndex + 1) % 8;
         } else {
@@ -722,3 +728,4 @@ String htmlPage() {
 )rawliteral";
   return page;
 }
+```
