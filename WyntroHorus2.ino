@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.29";
+const char* FIRMWARE_VERSION = "v1.0.30";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -232,8 +232,8 @@ void readSettings() {
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
 
-  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
-                turnsPerDay, turnDuration, direction, calculatedStepDelay);
+  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms, CustomName=%s\n",
+                turnsPerDay, turnDuration, direction, calculatedStepDelay, custom_name);
 }
 
 void writeMotorSettings() {
@@ -288,8 +288,11 @@ void setupMDNS() {
   String mac = WiFi.macAddress();
   mac.replace(":", "");
   String macLast4 = mac.substring(mac.length() - 4);
-  if (strlen(custom_name) > 0 && strlen(custom_name) <= 20) {
-    strncpy(mDNS_hostname, (String(custom_name) + "-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
+  String sanitized_name = String(custom_name);
+  sanitized_name.replace(" ", "-"); // Boşlukları tire ile değiştir
+  sanitized_name.replaceAll("[^a-zA-Z0-9-]", ""); // Geçersiz karakterleri kaldır
+  if (sanitized_name.length() > 0 && sanitized_name.length() <= 20) {
+    strncpy(mDNS_hostname, (sanitized_name + "-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
     mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
   } else {
     strncpy(mDNS_hostname, ("horus-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
@@ -362,10 +365,15 @@ void handleScan() {
 }
 
 void handleSaveWiFi() {
+  String old_name = String(custom_name);
   if (server.hasArg("ssid")) strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
   if (server.hasArg("password")) strncpy(password, server.arg("password").c_str(), sizeof(password));
   if (server.hasArg("name")) strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name));
   writeWiFiSettings();
+  if (String(custom_name) != old_name) {
+    MDNS.end();
+    setupMDNS();
+  }
   server.send(200, "text/plain", "OK");
   Serial.println("handleSaveWiFi: WiFi settings saved, restarting...");
   delay(1000);
