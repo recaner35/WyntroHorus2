@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.21"; // Updated firmware version
+const char* FIRMWARE_VERSION = "v1.0.22"; // Güncellenen firmware sürümü
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -22,7 +22,7 @@ char mDNS_hostname[32] = "";
 
 // Motor Settings
 int turnsPerDay = 600;
-float turnDuration = 15.0; // Updated for stability
+float turnDuration = 15.0; 
 int direction = 1;
 bool running = false;
 int completedTurns = 0;
@@ -31,7 +31,7 @@ int hourlyTurns = turnsPerDay / 24;
 static int currentStep = 0;
 static unsigned long lastStepTime = 0;
 static bool forward = true;
-float calculatedStepDelay = 0; // Motor adım gecikmesini hesaplamak için yeni değişken
+float calculatedStepDelay = 0; // Motor adım gecikmesini hesaplamak için değişken
 
 // Pin Definitions
 const int motorPin1 = 26;
@@ -44,7 +44,10 @@ const int stepsPerRevolution = 2048;
 WebServer server(80);
 WebSocketsServer webSocket(81);
 
-// Function prototypes
+// Motor kontrolü için görev kolu (task handle)
+TaskHandle_t motorTaskHandle = NULL;
+
+// Fonksiyon prototipleri
 void readSettings();
 void writeMotorSettings();
 void writeWiFiSettings();
@@ -54,9 +57,9 @@ void setupWebServer();
 void handleSet();
 void handleScan();
 void handleSaveWiFi();
-void handleCheckOTA();
 void stopMotor();
-void runMotor();
+void startMotor();
+void runMotorTask(void *parameter); // Yeni motor kontrol görevi
 void stepMotor(int step);
 void checkHourlyReset();
 void resetMotor();
@@ -65,7 +68,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 String htmlPage();
 bool isNewVersionAvailable(String latest, String current);
 void checkOTAUpdateTask(void *parameter);
-
 
 void setup() {
   Serial.begin(115200);
@@ -84,7 +86,6 @@ void setup() {
 
   // OTA Event Handling for better debugging
   ElegantOTA.onStart([]() {
-    running = false;
     stopMotor();
     Serial.println("OTA started, motor stopped.");
   });
@@ -96,23 +97,26 @@ void setup() {
     }
   });
 
-  // Uncomment to enable progress reporting in Serial Monitor
-  // ElegantOTA.onProgress([](size_t current, size_t final) {
-  //   Serial.printf("Progress: %u%%\n", (current * 100) / final);
-  // });
+  // Başlangıçta motor görevini oluştur
+  xTaskCreatePinnedToCore(
+      runMotorTask,
+      "MotorTask",
+      2048, // Stack size
+      NULL,
+      1,    // Priority
+      &motorTaskHandle,
+      0);   // Core 0'da çalıştır
 }
 
 void loop() {
   server.handleClient();
   webSocket.loop();
-  ElegantOTA.loop(); // ElegantOTA must be in the main loop to handle the upload
-  if (running) {
-    runMotor();
-  }
+  ElegantOTA.loop();
   checkHourlyReset();
 }
 
 void stepMotor(int step) {
+  // Motor adımı
   digitalWrite(motorPin1, step == 0 ? HIGH : LOW);
   digitalWrite(motorPin2, step == 1 ? HIGH : LOW);
   digitalWrite(motorPin3, step == 2 ? HIGH : LOW);
@@ -120,28 +124,41 @@ void stepMotor(int step) {
 }
 
 void stopMotor() {
+  // Motoru durdurmak için görevden çık
+  running = false;
+  vTaskSuspend(motorTaskHandle);
   digitalWrite(motorPin1, LOW);
   digitalWrite(motorPin2, LOW);
   digitalWrite(motorPin3, LOW);
   digitalWrite(motorPin4, LOW);
+  Serial.println("Motor durduruldu.");
 }
 
-void runMotor() {
-  // Hesaplanan adım gecikmesini kullan
-  if (running && millis() - lastStepTime >= calculatedStepDelay) {
-    if (direction == 1 || (direction == 3 && forward)) {
-      stepMotor(currentStep % 4);
-    } else {
-      stepMotor(3 - (currentStep % 4));
+void startMotor() {
+  // Motoru başlatmak için görevi devam ettir
+  running = true;
+  vTaskResume(motorTaskHandle);
+  Serial.println("Motor başlatıldı.");
+}
+
+void runMotorTask(void *parameter) {
+  for (;;) {
+    if (running) {
+      if (direction == 1 || (direction == 3 && forward)) {
+        stepMotor(currentStep % 4);
+      } else {
+        stepMotor(3 - (currentStep % 4));
+      }
+      currentStep++;
+      if (currentStep >= stepsPerRevolution) {
+        currentStep = 0;
+        completedTurns++;
+        if (direction == 3) forward = !forward;
+        updateWebSocket();
+        Serial.printf("Turn completed. Total turns: %d\n", completedTurns);
+      }
     }
-    currentStep++;
-    lastStepTime = millis();
-    if (currentStep >= stepsPerRevolution) {
-      currentStep = 0;
-      completedTurns++;
-      if (direction == 3) forward = !forward;
-      updateWebSocket();
-    }
+    vTaskDelay(pdMS_TO_TICKS(calculatedStepDelay));
   }
 }
 
@@ -160,16 +177,13 @@ void readSettings() {
   address += sizeof(turnDuration);
   EEPROM.get(address, direction);
   
-  // Default values
   if (turnsPerDay < 600 || turnsPerDay > 1200) turnsPerDay = 600;
   if (turnDuration < 10.0 || turnDuration > 15.0) turnDuration = 15.0;
   if (direction < 1 || direction > 3) direction = 1;
   hourlyTurns = turnsPerDay / 24;
   
-  // Motorun hızı, tur süresine göre hesaplanır
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerRevolution;
-
-  Serial.println("Settings read: TPD=" + String(turnsPerDay) + ", Duration=" + String(turnDuration) + ", Dir=" + String(direction));
+  Serial.printf("Ayarlar okundu: TPD=%d, Süre=%.2f, Yön=%d, Adım Gecikmesi=%.2f ms\n", turnsPerDay, turnDuration, direction, calculatedStepDelay);
 }
 
 void writeMotorSettings() {
@@ -180,7 +194,7 @@ void writeMotorSettings() {
   address += sizeof(turnDuration);
   EEPROM.put(address, direction);
   EEPROM.commit();
-  Serial.println("Motor settings saved: TPD=" + String(turnsPerDay) + ", Duration=" + String(turnDuration) + ", Dir=" + String(direction));
+  Serial.printf("Motor ayarları kaydedildi: TPD=%d, Süre=%.2f, Yön=%d\n", turnsPerDay, turnDuration, direction);
 }
 
 void writeWiFiSettings() {
@@ -191,13 +205,13 @@ void writeWiFiSettings() {
   address += sizeof(password);
   EEPROM.put(address, custom_name);
   EEPROM.commit();
-  Serial.println("WiFi settings saved: SSID=" + String(ssid) + ", Custom Name=" + String(custom_name));
+  Serial.println("WiFi ayarları kaydedildi, yeniden başlatılıyor...");
 }
 
 void setupWiFi() {
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAP(default_ssid, default_password);
-  Serial.println("AP started: " + String(default_ssid));
+  Serial.println("AP başlatıldı: " + String(default_ssid));
   if (strlen(ssid) > 0 && strlen(password) > 0) {
     WiFi.begin(ssid, password);
     int attempts = 0;
@@ -207,9 +221,9 @@ void setupWiFi() {
       attempts++;
     }
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nConnected to WiFi: " + String(ssid) + ", IP: " + WiFi.localIP().toString());
+      Serial.println("\nWiFi'ye bağlandı: " + String(ssid) + ", IP: " + WiFi.localIP().toString());
     } else {
-      Serial.println("\nWiFi connection failed, continuing in AP mode.");
+      Serial.println("\nWiFi bağlantısı başarısız, AP modunda devam ediliyor.");
     }
   }
 }
@@ -224,7 +238,7 @@ void setupMDNS() {
     strncat(mDNS_hostname, mac.c_str() + 8, sizeof(mDNS_hostname) - strlen(mDNS_hostname) - 1);
   }
   if (MDNS.begin(mDNS_hostname)) {
-    Serial.println("mDNS started: " + String(mDNS_hostname) + ".local");
+    Serial.println("mDNS başlatıldı: " + String(mDNS_hostname) + ".local");
   }
 }
 
@@ -237,14 +251,14 @@ void setupWebServer() {
     xTaskCreate(
       checkOTAUpdateTask,
       "CheckOTAUpdateTask",
-      4096, // Stack size
+      4096,
       NULL,
-      1, // Priority
+      1,
       NULL);
-    server.send(200, "text/plain", "OTA check started.");
+    server.send(200, "text/plain", "OTA kontrolü başlatıldı.");
   });
   server.begin();
-  Serial.println("Web server started.");
+  Serial.println("Web sunucusu başlatıldı.");
 }
 
 void handleSet() {
@@ -256,18 +270,15 @@ void handleSet() {
   if (direction < 1 || direction > 3) direction = 1;
   hourlyTurns = turnsPerDay / 24;
   
-  // Motorun hızını Tur Süresi değerine göre yeniden hesapla
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerRevolution;
+  Serial.printf("Yeni ayarlar: TPD=%d, Süre=%.2f, Yön=%d, Adım Gecikmesi=%.2f ms\n", turnsPerDay, turnDuration, direction, calculatedStepDelay);
 
   writeMotorSettings();
   if (server.hasArg("action")) {
     if (server.arg("action") == "start") {
-      running = true;
-      Serial.println("handleSet: running=true");
+      startMotor();
     } else if (server.arg("action") == "stop") {
-      running = false;
       stopMotor();
-      Serial.println("handleSet: running=false");
     } else if (server.arg("action") == "reset") {
       resetMotor();
     }
@@ -283,7 +294,7 @@ void handleScan() {
     String ssid_scan = WiFi.SSID(i);
     options += "<option value=\"" + ssid_scan + "\">" + ssid_scan + " (RSSI: " + String(WiFi.RSSI(i)) + " dBm)</option>";
   }
-  Serial.println("WiFi scan completed: " + String(n) + " networks found.");
+  Serial.println("WiFi taraması tamamlandı: " + String(n) + " ağ bulundu.");
   server.send(200, "text/plain", options);
 }
 
@@ -293,12 +304,11 @@ void handleSaveWiFi() {
   if (server.hasArg("name")) strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name));
   writeWiFiSettings();
   server.send(200, "text/plain", "OK");
-  Serial.println("WiFi settings saved, restarting...");
+  Serial.println("WiFi ayarları kaydedildi, cihaz yeniden başlatılıyor...");
   ESP.restart();
 }
 
 void resetMotor() {
-  running = false;
   stopMotor();
   turnsPerDay = 600;
   turnDuration = 15.0;
@@ -308,17 +318,17 @@ void resetMotor() {
   currentStep = 0;
   lastStepTime = millis();
   
-  // Tur süresi sıfırlanınca adım gecikmesini yeniden hesapla
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerRevolution;
+  Serial.printf("Motor ayarları sıfırlandı: TPD=%d, Süre=%.2f, Yön=%d, Adım Gecikmesi=%.2f ms\n", turnsPerDay, turnDuration, direction, calculatedStepDelay);
 
   writeMotorSettings();
   updateWebSocket();
-  Serial.println("Motor settings reset: TPD=600, Duration=15.0, Dir=1, Running=false");
+  Serial.println("Motor ayarları sıfırlandı.");
 }
 
 void checkHourlyReset() {
   unsigned long currentTime = millis();
-  if (currentTime - lastHourTime >= 3600000) { // 1 hour (3,600,000 ms)
+  if (currentTime - lastHourTime >= 3600000) { // 1 saat (3,600,000 ms)
     completedTurns = 0;
     lastHourTime = currentTime;
     updateWebSocket();
@@ -345,7 +355,7 @@ bool isNewVersionAvailable(String latest, String current) {
 }
 
 void checkOTAUpdateTask(void *parameter) {
-  Serial.println("checkOTAUpdateTask started.");
+  Serial.println("checkOTAUpdateTask başlatıldı.");
   HTTPClient http;
   http.setTimeout(10000);
   http.begin(github_url);
@@ -353,7 +363,7 @@ void checkOTAUpdateTask(void *parameter) {
   int httpCode = http.GET();
   StaticJsonDocument<256> statusDoc;
   
-  statusDoc["updateAvailable"] = false; // Default value
+  statusDoc["updateAvailable"] = false;
 
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
@@ -381,7 +391,7 @@ void checkOTAUpdateTask(void *parameter) {
   String json;
   serializeJson(statusDoc, json);
   webSocket.broadcastTXT(json);
-  Serial.println("checkOTAUpdateTask finished.");
+  Serial.println("checkOTAUpdateTask tamamlandı.");
   vTaskDelete(NULL);
 }
 
@@ -400,16 +410,16 @@ void updateWebSocket() {
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
-  Serial.println("WebSocket updated: " + json);
+  Serial.println("WebSocket güncellendi: " + json);
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
-      Serial.printf("WebSocket client [%u] disconnected\n", num);
+      Serial.printf("WebSocket client [%u] bağlantısı kesildi\n", num);
       break;
     case WStype_CONNECTED:
-      Serial.printf("WebSocket client [%u] connected\n", num);
+      Serial.printf("WebSocket client [%u] bağlandı\n", num);
       updateWebSocket();
       break;
     case WStype_TEXT:
@@ -614,11 +624,11 @@ String htmlPage() {
                 .then(response => response.text())
                 .then(data => {
                     console.log(data);
-                    showMessage(`Command sent: ${action}`);
+                    showMessage(`Komut gönderildi: ${action}`);
                 })
                 .catch(error => {
-                    console.error('Error:', error);
-                    showMessage('Error sending command.', 'error');
+                    console.error('Hata:', error);
+                    showMessage('Komut gönderilirken hata oluştu.', 'error');
                 });
         }
         
@@ -627,12 +637,12 @@ String htmlPage() {
                 .then(response => response.text())
                 .then(data => {
                     document.getElementById('ssid').innerHTML = data;
-                    console.log('WiFi options loaded');
-                    showMessage('WiFi networks scanned.');
+                    console.log('WiFi seçenekleri yüklendi.');
+                    showMessage('WiFi ağları tarandı.');
                 })
                 .catch(error => {
-                    console.error('Error:', error);
-                    showMessage('WiFi scan error.', 'error');
+                    console.error('Hata:', error);
+                    showMessage('WiFi tarama hatası.', 'error');
                 });
         }
 
@@ -648,11 +658,11 @@ String htmlPage() {
             .then(response => response.text())
             .then(data => {
                 console.log(data);
-                showMessage('WiFi settings saved! Device restarting.', 'info');
+                showMessage('WiFi ayarları kaydedildi! Cihaz yeniden başlatılıyor.', 'info');
             })
             .catch(error => {
-                console.error('Error:', error);
-                showMessage('Error saving WiFi settings.', 'error');
+                console.error('Hata:', error);
+                showMessage('WiFi ayarları kaydedilirken hata oluştu.', 'error');
             });
         }
 
@@ -666,17 +676,17 @@ String htmlPage() {
                     console.log(data);
                 })
                 .catch(error => {
-                    console.error('Error:', error);
+                    console.error('Hata:', error);
                     showMessage('Güncelleme kontrolü başlatılamadı.', 'error');
                 });
         }
 
         function installUpdate() {
-            // Redirect to the ElegantOTA update page
+            // Yönlendirme
             window.location.href = "/update";
         }
         
-        // Open the motor tab by default on load
+        // Yüklendiğinde motor sekmesini aç
         window.onload = function() {
             openTab('motor');
         }
