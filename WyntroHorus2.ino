@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.20"; // Updated firmware version
+const char* FIRMWARE_VERSION = "v1.0.21"; // Updated firmware version
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -31,6 +31,7 @@ int hourlyTurns = turnsPerDay / 24;
 static int currentStep = 0;
 static unsigned long lastStepTime = 0;
 static bool forward = true;
+float calculatedStepDelay = 0; // Motor adım gecikmesini hesaplamak için yeni değişken
 
 // Pin Definitions
 const int motorPin1 = 26;
@@ -92,8 +93,6 @@ void setup() {
       Serial.println("OTA update completed successfully!");
     } else {
       Serial.println("OTA update failed!");
-      // The line below was removed because ElegantOTA.get is not supported in newer versions.
-      // Serial.printf("Error Code: %u\n", ElegantOTA.get -> _error); 
     }
   });
 
@@ -128,8 +127,8 @@ void stopMotor() {
 }
 
 void runMotor() {
-  const float stepDelay = 5.0; // Fixed 5ms step delay
-  if (running && millis() - lastStepTime >= stepDelay) {
+  // Hesaplanan adım gecikmesini kullan
+  if (running && millis() - lastStepTime >= calculatedStepDelay) {
     if (direction == 1 || (direction == 3 && forward)) {
       stepMotor(currentStep % 4);
     } else {
@@ -167,6 +166,9 @@ void readSettings() {
   if (direction < 1 || direction > 3) direction = 1;
   hourlyTurns = turnsPerDay / 24;
   
+  // Motorun hızı, tur süresine göre hesaplanır
+  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerRevolution;
+
   Serial.println("Settings read: TPD=" + String(turnsPerDay) + ", Duration=" + String(turnDuration) + ", Dir=" + String(direction));
 }
 
@@ -253,6 +255,10 @@ void handleSet() {
   if (turnDuration < 10.0 || turnDuration > 15.0) turnDuration = 15.0;
   if (direction < 1 || direction > 3) direction = 1;
   hourlyTurns = turnsPerDay / 24;
+  
+  // Motorun hızını Tur Süresi değerine göre yeniden hesapla
+  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerRevolution;
+
   writeMotorSettings();
   if (server.hasArg("action")) {
     if (server.arg("action") == "start") {
@@ -301,6 +307,10 @@ void resetMotor() {
   hourlyTurns = turnsPerDay / 24;
   currentStep = 0;
   lastStepTime = millis();
+  
+  // Tur süresi sıfırlanınca adım gecikmesini yeniden hesapla
+  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerRevolution;
+
   writeMotorSettings();
   updateWebSocket();
   Serial.println("Motor settings reset: TPD=600, Duration=15.0, Dir=1, Running=false");
@@ -342,6 +352,8 @@ void checkOTAUpdateTask(void *parameter) {
   http.addHeader("Accept", "application/vnd.github.v3+json");
   int httpCode = http.GET();
   StaticJsonDocument<256> statusDoc;
+  
+  statusDoc["updateAvailable"] = false; // Default value
 
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
@@ -353,6 +365,7 @@ void checkOTAUpdateTask(void *parameter) {
 
       if (isNewVersionAvailable(latestVersion, currentVersion)) {
         statusDoc["otaStatus"] = "Yeni sürüm mevcut: " + latestVersion;
+        statusDoc["updateAvailable"] = true;
       } else {
         statusDoc["otaStatus"] = "Firmware güncel: " + currentVersion;
       }
@@ -489,8 +502,9 @@ String htmlPage() {
             <p class="text-center">Firmware Sürümü: <span id="version">-</span></p>
             <p class="text-center" id="ota_status"></p>
             <p class="text-center">Cihaz Adı: <span id="deviceName">-</span></p>
-            <div class="flex justify-center space-x-2">
-                <button onclick="checkUpdate()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Güncellemeleri Kontrol Et</button>
+            <div class="flex flex-col items-center space-y-2">
+                <button id="checkUpdateButton" onclick="checkUpdate()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Güncellemeleri Kontrol Et</button>
+                <button id="installUpdateButton" onclick="installUpdate()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200 hidden">Güncellemeyi Yükle</button>
             </div>
         </div>
 
@@ -504,25 +518,43 @@ String htmlPage() {
             console.log('WebSocket message received: ' + event.data);
             try {
                 let data = JSON.parse(event.data);
+                
+                const statusElement = document.getElementById('status');
+                const motorSpinnerElement = document.getElementById('motor_spinner');
+                const completedTurnsElement = document.getElementById('completedTurns');
+                const hourlyTurnsElement = document.getElementById('hourlyTurns');
+                const tpdElement = document.getElementById('tpd');
+                const tpdValElement = document.getElementById('tpd_val');
+                const durationElement = document.getElementById('duration');
+                const durationValElement = document.getElementById('duration_val');
+                const dirElement = document.getElementById('dir');
+                const versionElement = document.getElementById('version');
+                const otaStatusElement = document.getElementById('ota_status');
+                const deviceNameElement = document.getElementById('deviceName');
+                const currentSSIDElement = document.getElementById('currentSSID');
+                const connectionStatusElement = document.getElementById('connectionStatus');
+                const checkUpdateButton = document.getElementById('checkUpdateButton');
+                const installUpdateButton = document.getElementById('installUpdateButton');
+
                 if (data.status) {
-                    document.getElementById('status').innerText = data.status;
-                    document.getElementById('motor_spinner').classList.toggle('hidden', data.status !== 'Çalışıyor');
+                    statusElement.innerText = data.status;
+                    motorSpinnerElement.classList.toggle('hidden', data.status !== 'Çalışıyor');
                 }
-                if (data.completedTurns != null) document.getElementById('completedTurns').innerText = data.completedTurns;
-                if (data.hourlyTurns != null) document.getElementById('hourlyTurns').innerText = data.hourlyTurns;
+                if (data.completedTurns != null) completedTurnsElement.innerText = data.completedTurns;
+                if (data.hourlyTurns != null) hourlyTurnsElement.innerText = data.hourlyTurns;
                 if (data.turnsPerDay != null) {
-                    document.getElementById('tpd').value = data.turnsPerDay;
-                    document.getElementById('tpd_val').innerText = data.turnsPerDay;
+                    tpdElement.value = data.turnsPerDay;
+                    tpdValElement.innerText = data.turnsPerDay;
                 }
                 if (data.turnDuration != null) {
-                    document.getElementById('duration').value = data.turnDuration;
-                    document.getElementById('duration_val').innerText = data.turnDuration;
+                    durationElement.value = data.turnDuration;
+                    durationValElement.innerText = data.turnDuration;
                 }
-                if (data.direction != null) document.getElementById('dir').value = data.direction;
-                if (data.firmwareVersion) document.getElementById('version').innerText = data.firmwareVersion;
+                if (data.direction != null) dirElement.value = data.direction;
+                if (data.firmwareVersion) versionElement.innerText = data.firmwareVersion;
+                
                 if (data.otaStatus) {
-                    document.getElementById('ota_status').innerText = data.otaStatus;
-                    const otaStatusElement = document.getElementById('ota_status');
+                    otaStatusElement.innerText = data.otaStatus;
                     if (data.otaStatus.includes("güncel")) {
                         otaStatusElement.style.color = 'green';
                     } else if (data.otaStatus.includes("Yeni sürüm")) {
@@ -531,9 +563,18 @@ String htmlPage() {
                         otaStatusElement.style.color = 'red';
                     }
                 }
-                if (data.customName != null) document.getElementById('deviceName').innerText = data.customName;
-                if (data.currentSSID != null) document.getElementById('currentSSID').innerText = data.currentSSID;
-                if (data.connectionStatus != null) document.getElementById('connectionStatus').innerText = data.connectionStatus;
+                if (data.updateAvailable != null) {
+                    if (data.updateAvailable) {
+                        checkUpdateButton.classList.add('hidden');
+                        installUpdateButton.classList.remove('hidden');
+                    } else {
+                        checkUpdateButton.classList.remove('hidden');
+                        installUpdateButton.classList.add('hidden');
+                    }
+                }
+                if (data.customName != null) deviceNameElement.innerText = data.customName;
+                if (data.currentSSID != null) currentSSIDElement.innerText = data.currentSSID;
+                if (data.connectionStatus != null) connectionStatusElement.innerText = data.connectionStatus;
             } catch (e) {
                 console.error("JSON parse error:", e);
                 console.log("Received data:", event.data);
@@ -616,8 +657,9 @@ String htmlPage() {
         }
 
         function checkUpdate() {
-            document.getElementById('ota_status').innerText = "Checking for updates...";
+            document.getElementById('ota_status').innerText = "Güncellemeler kontrol ediliyor...";
             document.getElementById('ota_status').style.color = 'black';
+            document.getElementById('installUpdateButton').classList.add('hidden');
             fetch('/check_update')
                 .then(response => response.text())
                 .then(data => {
@@ -625,8 +667,13 @@ String htmlPage() {
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    showMessage('Could not start update check.', 'error');
+                    showMessage('Güncelleme kontrolü başlatılamadı.', 'error');
                 });
+        }
+
+        function installUpdate() {
+            // Redirect to the ElegantOTA update page
+            window.location.href = "/update";
         }
         
         // Open the motor tab by default on load
