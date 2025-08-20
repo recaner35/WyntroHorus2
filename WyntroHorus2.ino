@@ -1,4 +1,3 @@
-```cpp
 #include <WiFi.h>
 #include <WebServer.h>
 #include <FS.h>
@@ -11,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.26";
+const char* FIRMWARE_VERSION = "v1.0.27";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -728,4 +727,3 @@ String htmlPage() {
 )rawliteral";
   return page;
 }
-```
