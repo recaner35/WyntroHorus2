@@ -66,6 +66,7 @@ void setupWebServer();
 void handleSet();
 void handleScan();
 void handleSaveWiFi();
+void handleStatus();
 void stopMotor();
 void startMotor();
 void runMotorTask(void *parameter);
@@ -248,9 +249,9 @@ void writeMotorSettings() {
 
 void writeWiFiSettings() {
   int address = 0;
-  EEPROM.put(address, ssid);
+  EEPROM.write(address, ssid);
   address += sizeof(ssid);
-  EEPROM.put(address, password);
+  EEPROM.write(address, password);
   address += sizeof(password);
   EEPROM.put(address, custom_name);
   EEPROM.commit();
@@ -284,13 +285,15 @@ void setupWiFi() {
 }
 
 void setupMDNS() {
-  strcpy(mDNS_hostname, "horus");
+  String mac = WiFi.macAddress();
+  mac.replace(":", "");
+  String macLast4 = mac.substring(mac.length() - 4);
   if (strlen(custom_name) > 0 && strlen(custom_name) <= 20) {
-    strncat(mDNS_hostname, custom_name, sizeof(mDNS_hostname) - strlen(mDNS_hostname) - 1);
+    strncpy(mDNS_hostname, (String(custom_name) + "-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
+    mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
   } else {
-    String mac = WiFi.macAddress();
-    mac.replace(":", "");
-    strncat(mDNS_hostname, mac.c_str() + 8, sizeof(mDNS_hostname) - strlen(mDNS_hostname) - 1);
+    strncpy(mDNS_hostname, ("horus-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
+    mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
   }
   if (MDNS.begin(mDNS_hostname)) {
     Serial.println("setupMDNS: Started: " + String(mDNS_hostname) + ".local");
@@ -304,6 +307,7 @@ void setupWebServer() {
   server.on("/set", HTTP_GET, handleSet);
   server.on("/scan", HTTP_GET, handleScan);
   server.on("/save_wifi", HTTP_POST, handleSaveWiFi);
+  server.on("/status", HTTP_GET, handleStatus);
   server.on("/check_update", HTTP_GET, []() {
     xTaskCreate(
         checkOTAUpdateTask,
@@ -366,6 +370,21 @@ void handleSaveWiFi() {
   Serial.println("handleSaveWiFi: WiFi settings saved, restarting...");
   delay(1000);
   ESP.restart();
+}
+
+void handleStatus() {
+  StaticJsonDocument<256> doc;
+  doc["status"] = running ? "Çalışıyor" : "Durduruldu";
+  doc["completedTurns"] = completedTurns;
+  doc["hourlyTurns"] = hourlyTurns;
+  doc["turnsPerDay"] = turnsPerDay;
+  doc["turnDuration"] = turnDuration;
+  doc["direction"] = direction;
+  doc["customName"] = custom_name;
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "application/json", json);
+  Serial.println("handleStatus: Status sent.");
 }
 
 void resetMotor() {
@@ -460,6 +479,7 @@ void updateWebSocket() {
   doc["customName"] = custom_name;
   doc["currentSSID"] = WiFi.SSID() != "" ? WiFi.SSID() : String(default_ssid);
   doc["connectionStatus"] = WiFi.status() == WL_CONNECTED ? "Bağlandı" : "Hotspot modunda";
+  doc["mDNS"] = String(mDNS_hostname) + ".local";
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
@@ -501,9 +521,10 @@ String htmlPage() {
     <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-lg">
         <h1 class="text-2xl font-bold mb-4 text-center">Horus by Wyntro</h1>
 
-        <div class="flex justify-center mb-4 space-x-2">
+        <div class="flex justify-center mb-4 space-x-2 flex-wrap">
             <button onclick="openTab('motor')" class="tab-button bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="settings">Ayarlar</button>
             <button onclick="openTab('wifi')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="wifi">WiFi</button>
+            <button onclick="openTab('devices')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="devices">Cihazlar</button>
             <button onclick="openTab('about')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="about">Hakkında</button>
         </div>
 
@@ -563,17 +584,31 @@ String htmlPage() {
             </div>
         </div>
 
+        <!-- Cihazlar Tabı -->
+        <div id="devices" class="tab-content space-y-4">
+            <div>
+                <label class="block text-sm font-medium" data-translate="add_device">Cihaz Ekle (örn: horus-1234.local)</label>
+                <input type="text" id="deviceDomain" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100" placeholder="horus-1234.local">
+            </div>
+            <div class="flex justify-center">
+                <button onclick="addDevice()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="add">Ekle</button>
+            </div>
+            <div id="deviceList" class="space-y-2"></div>
+        </div>
+
         <!-- Hakkında Tabı -->
         <div id="about" class="tab-content space-y-4">
             <p class="text-center" data-translate="firmware_version">Firmware Sürümü: <span id="version">-</span></p>
             <p class="text-center" id="ota_status"></p>
             <p class="text-center" data-translate="device_name">Cihaz Adı: <span id="deviceName">-</span></p>
+            <p class="text-center" data-translate="mdns_domain">mDNS Domain: <span id="mDNS">-</span></p>
             <div>
                 <label class="block text-sm font-medium" data-translate="device_name">Cihaz Adı</label>
                 <input type="text" id="customName" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
             </div>
-            <div class="flex justify-center">
+            <div class="flex justify-center space-x-2">
                 <button onclick="saveDeviceName()" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="save">Kaydet</button>
+                <button onclick="resetDeviceName()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="reset_device_name">Cihaz Adını Sıfırla</button>
             </div>
             <div class="flex flex-col items-center space-y-2">
                 <button id="checkUpdateButton" onclick="checkUpdate()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="check_updates">Güncellemeleri Kontrol Et</button>
@@ -587,6 +622,8 @@ String htmlPage() {
 
     <script>
         let ws = new WebSocket('ws://' + window.location.hostname + ':81/');
+        let devices = JSON.parse(localStorage.getItem('horusDevices')) || [];
+
         ws.onmessage = function(event) {
             console.log('WebSocket message received: ' + event.data);
             try {
@@ -602,6 +639,7 @@ String htmlPage() {
                 const versionElement = document.getElementById('version');
                 const otaStatusElement = document.getElementById('ota_status');
                 const deviceNameElement = document.getElementById('deviceName');
+                const mDNSElement = document.getElementById('mDNS');
                 const currentSSIDElement = document.getElementById('currentSSID');
                 const connectionStatusElement = document.getElementById('connectionStatus');
                 const motorStatusElement = document.getElementById('motor_status');
@@ -638,6 +676,7 @@ String htmlPage() {
                     deviceNameElement.innerText = data.customName;
                     customNameElement.value = data.customName;
                 }
+                if (data.mDNS) mDNSElement.innerText = data.mDNS;
                 if (data.currentSSID != null) currentSSIDElement.innerText = data.currentSSID;
                 if (data.connectionStatus != null) connectionStatusElement.innerText = data.connectionStatus;
                 if (data.motorStatus) motorStatusElement.innerText = data.motorStatus;
@@ -659,6 +698,7 @@ String htmlPage() {
                 activeTabButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
                 activeTabButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
             }
+            if (tabName === 'devices') updateDeviceList();
         }
 
         function showMessage(msg, type = 'info') {
@@ -672,7 +712,8 @@ String htmlPage() {
             let tpd = document.getElementById('tpd').value;
             let duration = document.getElementById('duration').value;
             let dir = document.querySelector('input[name="dir"]:checked').value;
-            fetch(`/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`)
+            let url = `/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`;
+            fetch(url)
                 .then(response => response.text())
                 .then(data => {
                     console.log(data);
@@ -735,6 +776,99 @@ String htmlPage() {
             });
         }
 
+        function resetDeviceName() {
+            fetch('/save_wifi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `name=`
+            })
+            .then(response => response.text())
+            .then(data => {
+                console.log(data);
+                showMessage('Cihaz adı sıfırlandı! Cihaz yeniden başlatılıyor.', 'info');
+            })
+            .catch(error => {
+                console.error('Hata:', error);
+                showMessage('Cihaz adı sıfırlanırken hata oluştu.', 'error');
+            });
+        }
+
+        function addDevice() {
+            let domain = document.getElementById('deviceDomain').value.trim();
+            if (!domain.match(/^[a-zA-Z0-9-]+\.[a-z]{2,}$/)) {
+                showMessage('Geçersiz domain formatı! Örn: horus-1234.local', 'error');
+                return;
+            }
+            if (!devices.includes(domain)) {
+                devices.push(domain);
+                localStorage.setItem('horusDevices', JSON.stringify(devices));
+                showMessage(`Cihaz eklendi: ${domain}`);
+                updateDeviceList();
+            } else {
+                showMessage('Bu cihaz zaten ekli!', 'error');
+            }
+            document.getElementById('deviceDomain').value = '';
+        }
+
+        function updateDeviceList() {
+            const deviceList = document.getElementById('deviceList');
+            deviceList.innerHTML = '';
+            devices.forEach((domain, index) => {
+                fetch(`http://${domain}/status`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const deviceDiv = document.createElement('div');
+                        deviceDiv.className = 'border p-2 rounded dark:border-gray-600';
+                        deviceDiv.innerHTML = `
+                            <p><strong>${domain}</strong>: ${data.status} (Turlar: ${data.completedTurns}, Günlük: ${data.turnsPerDay}, Süre: ${data.turnDuration}s, Yön: ${data.direction == 1 ? 'Saat Yönü' : data.direction == 2 ? 'Saat Yönü Ters' : 'İkisi'})</p>
+                            <div class="flex justify-between space-x-2 mt-2">
+                                <button onclick="controlDevice('${domain}', 'start')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded text-sm" data-translate="start">Başlat</button>
+                                <button onclick="controlDevice('${domain}', 'stop')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-sm" data-translate="stop">Durdur</button>
+                                <button onclick="controlDevice('${domain}', 'reset')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-1 px-2 rounded text-sm" data-translate="reset_settings">Sıfırla</button>
+                                <button onclick="removeDevice(${index})" class="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm" data-translate="remove">Kaldır</button>
+                            </div>
+                        `;
+                        deviceList.appendChild(deviceDiv);
+                    })
+                    .catch(error => {
+                        console.error(`Hata (${domain}):`, error);
+                        const deviceDiv = document.createElement('div');
+                        deviceDiv.className = 'border p-2 rounded dark:border-gray-600';
+                        deviceDiv.innerHTML = `
+                            <p><strong>${domain}</strong>: Bağlantı hatası</p>
+                            <div class="flex justify-end mt-2">
+                                <button onclick="removeDevice(${index})" class="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm" data-translate="remove">Kaldır</button>
+                            </div>
+                        `;
+                        deviceList.appendChild(deviceDiv);
+                    });
+            });
+        }
+
+        function controlDevice(domain, action) {
+            let tpd = document.getElementById('tpd').value;
+            let duration = document.getElementById('duration').value;
+            let dir = document.querySelector('input[name="dir"]:checked').value;
+            fetch(`http://${domain}/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`)
+                .then(response => response.text())
+                .then(data => {
+                    console.log(data);
+                    showMessage(`Komut gönderildi (${domain}): ${action}`);
+                    updateDeviceList();
+                })
+                .catch(error => {
+                    console.error('Hata:', error);
+                    showMessage(`Komut gönderilirken hata oluştu (${domain}).`, 'error');
+                });
+        }
+
+        function removeDevice(index) {
+            devices.splice(index, 1);
+            localStorage.setItem('horusDevices', JSON.stringify(devices));
+            showMessage('Cihaz kaldırıldı.');
+            updateDeviceList();
+        }
+
         function checkUpdate() {
             document.getElementById('ota_status').innerText = "Güncellemeler kontrol ediliyor...";
             document.getElementById('ota_status').style.color = 'black';
@@ -754,6 +888,7 @@ String htmlPage() {
 
         window.onload = function() {
             openTab('motor');
+            updateDeviceList();
         }
     </script>
 </body>
