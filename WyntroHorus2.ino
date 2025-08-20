@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.28";
+const char* FIRMWARE_VERSION = "v1.0.29";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -249,11 +249,11 @@ void writeMotorSettings() {
 
 void writeWiFiSettings() {
   int address = 0;
-  EEPROM.write(address, ssid);
+  EEPROM.writeBytes(address, ssid, sizeof(ssid));
   address += sizeof(ssid);
-  EEPROM.write(address, password);
+  EEPROM.writeBytes(address, password, sizeof(password));
   address += sizeof(password);
-  EEPROM.put(address, custom_name);
+  EEPROM.writeBytes(address, custom_name, sizeof(custom_name));
   EEPROM.commit();
   Serial.println("writeWiFiSettings: WiFi settings saved, restarting...");
 }
