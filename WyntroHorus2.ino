@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.27";
+const char* FIRMWARE_VERSION = "v1.0.28";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -502,70 +502,70 @@ String htmlPage() {
         <h1 class="text-2xl font-bold mb-4 text-center">Horus by Wyntro</h1>
 
         <div class="flex justify-center mb-4 space-x-2">
-            <button onclick="openTab('motor')" class="tab-button bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="settings">Ayarlar</button>
-            <button onclick="openTab('wifi')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="wifi">WiFi</button>
-            <button onclick="openTab('about')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="about">Hakkında</button>
+            <button onclick="openTab('motor')" class="tab-button bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Ayarlar</button>
+            <button onclick="openTab('wifi')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">WiFi</button>
+            <button onclick="openTab('about')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Hakkında</button>
         </div>
 
         <!-- Ayarlar Tabı -->
         <div id="motor" class="tab-content active space-y-4">
-            <p class="text-center" data-translate="status">Durum: <span id="status">Durduruldu</span> <span id="motor_spinner" class="hidden animate-spin-slow">🔄</span></p>
-            <p class="text-center" data-translate="completed_turns">Tamamlanan Turlar: <span id="completedTurns">0</span></p>
-            <p class="text-center" data-translate="hourly_turns">Saatlik Turlar: <span id="hourlyTurns">0</span></p>
+            <p class="text-center">Durum: <span id="status">Durduruldu</span> <span id="motor_spinner" class="hidden animate-spin-slow">🔄</span></p>
+            <p class="text-center">Tamamlanan Turlar: <span id="completedTurns">0</span></p>
+            <p class="text-center">Saatlik Turlar: <span id="hourlyTurns">0</span></p>
             <p id="motor_status" class="text-center"></p>
             <div>
-                <label class="block text-sm font-medium" data-translate="turns_per_day">Günlük Tur Sayısı: <span id="tpd_val">600</span></label>
+                <label class="block text-sm font-medium">Günlük Tur Sayısı: <span id="tpd_val">600</span></label>
                 <input type="range" id="tpd" min="600" max="1200" value="600" oninput="tpd_val.innerText=this.value" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
             </div>
             <div>
-                <label class="block text-sm font-medium" data-translate="turn_duration">Tur Süresi (s): <span id="duration_val">15.0</span></label>
+                <label class="block text-sm font-medium">Tur Süresi (s): <span id="duration_val">15.0</span></label>
                 <input type="range" id="duration" min="10" max="15" step="0.1" value="15.0" oninput="duration_val.innerText=this.value" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
             </div>
             <div>
-                <label class="block text-sm font-medium" data-translate="direction">Dönüş Yönü</label>
+                <label class="block text-sm font-medium">Dönüş Yönü</label>
                 <select id="dir" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
-                    <option value="1" data-translate="clockwise">Saat Yönü</option>
-                    <option value="2" data-translate="counter_clockwise">Saat Yönü Ters</option>
-                    <option value="3" data-translate="both">İkisi</option>
+                    <option value="1">Saat Yönü</option>
+                    <option value="2">Saat Yönü Ters</option>
+                    <option value="3">İkisi</option>
                 </select>
             </div>
             <div class="flex justify-center space-x-2">
-                <button onclick="sendCommand('start')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="start">Başlat</button>
-                <button onclick="sendCommand('stop')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="stop">Durdur</button>
-                <button onclick="sendCommand('reset')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="reset_settings">Ayarları Sıfırla</button>
+                <button onclick="sendCommand('start')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Başlat</button>
+                <button onclick="sendCommand('stop')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Durdur</button>
+                <button onclick="sendCommand('reset')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Ayarları Sıfırla</button>
             </div>
         </div>
 
         <!-- WiFi Tabı -->
         <div id="wifi" class="tab-content space-y-4">
-            <p class="text-center" id="wifi_info" data-translate="connected">Bağlı: <span id="currentSSID">-</span></p>
-            <p class="text-center" id="conn_status" data-translate="connection_status">Durum: <span id="connectionStatus">-</span></p>
+            <p class="text-center" id="wifi_info">Bağlı: <span id="currentSSID">-</span></p>
+            <p class="text-center" id="conn_status">Durum: <span id="connectionStatus">-</span></p>
             <div>
-                <label class="block text-sm font-medium" data-translate="network_name">Ağ Adı</label>
+                <label class="block text-sm font-medium">Ağ Adı</label>
                 <select id="ssid" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100"></select>
             </div>
             <div>
-                <label class="block text-sm font-medium" data-translate="password">Şifre</label>
+                <label class="block text-sm font-medium">Şifre</label>
                 <input type="password" id="wifi_password" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
             </div>
             <div>
-                <label class="block text-sm font-medium" data-translate="device_name">Cihaz Adı</label>
+                <label class="block text-sm font-medium">Cihaz Adı</label>
                 <input type="text" id="customName" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
             </div>
             <div class="flex justify-center space-x-2">
-                <button onclick="scanWiFi()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="scan_networks">Ağları Tara</button>
-                <button onclick="saveWiFi()" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="save_restart">Kaydet & Yeniden Başlat</button>
+                <button onclick="scanWiFi()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Ağları Tara</button>
+                <button onclick="saveWiFi()" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Kaydet & Yeniden Başlat</button>
             </div>
         </div>
 
         <!-- Hakkında Tabı -->
         <div id="about" class="tab-content space-y-4">
-            <p class="text-center" data-translate="firmware_version">Firmware Sürümü: <span id="version">-</span></p>
+            <p class="text-center">Firmware Sürümü: <span id="version">-</span></p>
             <p class="text-center" id="ota_status"></p>
-            <p class="text-center" data-translate="device_name">Cihaz Adı: <span id="deviceName">-</span></p>
+            <p class="text-center">Cihaz Adı: <span id="deviceName">-</span></p>
             <div class="flex flex-col items-center space-y-2">
-                <button id="checkUpdateButton" onclick="checkUpdate()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="check_updates">Güncellemeleri Kontrol Et</button>
-                <button id="installUpdateButton" onclick="installUpdate()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200 hidden" data-translate="install_update">Güncellemeyi Yükle</button>
+                <button id="checkUpdateButton" onclick="checkUpdate()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Güncellemeleri Kontrol Et</button>
+                <button id="installUpdateButton" onclick="installUpdate()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200 hidden">Güncellemeyi Yükle</button>
             </div>
         </div>
 
