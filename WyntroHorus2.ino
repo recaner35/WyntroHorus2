@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.30";
+const char* FIRMWARE_VERSION = "v1.0.31";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -79,6 +79,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 String htmlPage();
 bool isNewVersionAvailable(String latest, String current);
 void checkOTAUpdateTask(void *parameter);
+String sanitizeString(String input);
 
 void setup() {
   Serial.begin(115200);
@@ -284,13 +285,24 @@ void setupWiFi() {
   }
 }
 
+String sanitizeString(String input) {
+  String result = input;
+  result.replace(" ", "-"); // Boşlukları tire ile değiştir
+  String sanitized = "";
+  for (int i = 0; i < result.length(); i++) {
+    char c = result[i];
+    if (isAlphaNumeric(c) || c == '-') {
+      sanitized += c;
+    }
+  }
+  return sanitized;
+}
+
 void setupMDNS() {
   String mac = WiFi.macAddress();
   mac.replace(":", "");
   String macLast4 = mac.substring(mac.length() - 4);
-  String sanitized_name = String(custom_name);
-  sanitized_name.replace(" ", "-"); // Boşlukları tire ile değiştir
-  sanitized_name.replaceAll("[^a-zA-Z0-9-]", ""); // Geçersiz karakterleri kaldır
+  String sanitized_name = sanitizeString(String(custom_name));
   if (sanitized_name.length() > 0 && sanitized_name.length() <= 20) {
     strncpy(mDNS_hostname, (sanitized_name + "-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
     mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
@@ -365,7 +377,7 @@ void handleScan() {
 }
 
 void handleSaveWiFi() {
-  String old_name = String(custom_name);
+  String old_name = String-custom_name);
   if (server.hasArg("ssid")) strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
   if (server.hasArg("password")) strncpy(password, server.arg("password").c_str(), sizeof(password));
   if (server.hasArg("name")) strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name));
