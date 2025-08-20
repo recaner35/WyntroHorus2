@@ -80,17 +80,33 @@ void setup() {
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
   ElegantOTA.begin(&server);
+
+  // OTA Event Handling for better debugging
   ElegantOTA.onStart([]() {
     running = false;
     stopMotor();
     Serial.println("OTA started, motor stopped.");
   });
+  ElegantOTA.onEnd([](bool success) {
+    if (success) {
+      Serial.println("OTA update completed successfully!");
+    } else {
+      Serial.println("OTA update failed!");
+      // The line below was removed because ElegantOTA.get is not supported in newer versions.
+      // Serial.printf("Error Code: %u\n", ElegantOTA.get -> _error); 
+    }
+  });
+
+  // Uncomment to enable progress reporting in Serial Monitor
+  // ElegantOTA.onProgress([](size_t current, size_t final) {
+  //   Serial.printf("Progress: %u%%\n", (current * 100) / final);
+  // });
 }
 
 void loop() {
-  webSocket.loop();
   server.handleClient();
-  ElegantOTA.loop();
+  webSocket.loop();
+  ElegantOTA.loop(); // ElegantOTA must be in the main loop to handle the upload
   if (running) {
     runMotor();
   }
@@ -126,23 +142,24 @@ void runMotor() {
       completedTurns++;
       if (direction == 3) forward = !forward;
       updateWebSocket();
-      StaticJsonDocument<256> doc;
-      doc["motorStatus"] = "Motor running, completed turns: " + String(completedTurns);
-      String json;
-      serializeJson(doc, json);
-      webSocket.broadcastTXT(json);
     }
   }
 }
 
 void readSettings() {
   EEPROM.begin(512);
-  EEPROM.readBytes(0, ssid, sizeof(ssid)); // Düzeltildi
-  EEPROM.readBytes(32, password, sizeof(password)); // Düzeltildi
-  EEPROM.readBytes(64, custom_name, sizeof(custom_name)); // Düzeltildi
-  EEPROM.get(100, turnsPerDay);
-  EEPROM.get(104, turnDuration);
-  EEPROM.get(108, direction);
+  int address = 0;
+  EEPROM.readBytes(address, ssid, sizeof(ssid));
+  address += sizeof(ssid);
+  EEPROM.readBytes(address, password, sizeof(password));
+  address += sizeof(password);
+  EEPROM.readBytes(address, custom_name, sizeof(custom_name));
+  address += sizeof(custom_name);
+  EEPROM.get(address, turnsPerDay);
+  address += sizeof(turnsPerDay);
+  EEPROM.get(address, turnDuration);
+  address += sizeof(turnDuration);
+  EEPROM.get(address, direction);
   
   // Default values
   if (turnsPerDay < 600 || turnsPerDay > 1200) turnsPerDay = 600;
@@ -154,17 +171,23 @@ void readSettings() {
 }
 
 void writeMotorSettings() {
-  EEPROM.put(100, turnsPerDay);
-  EEPROM.put(104, turnDuration);
-  EEPROM.put(108, direction);
+  int address = sizeof(ssid) + sizeof(password) + sizeof(custom_name);
+  EEPROM.put(address, turnsPerDay);
+  address += sizeof(turnsPerDay);
+  EEPROM.put(address, turnDuration);
+  address += sizeof(turnDuration);
+  EEPROM.put(address, direction);
   EEPROM.commit();
   Serial.println("Motor settings saved: TPD=" + String(turnsPerDay) + ", Duration=" + String(turnDuration) + ", Dir=" + String(direction));
 }
 
 void writeWiFiSettings() {
-  EEPROM.put(0, ssid);
-  EEPROM.put(32, password);
-  EEPROM.put(64, custom_name); // Different address for custom_name
+  int address = 0;
+  EEPROM.put(address, ssid);
+  address += sizeof(ssid);
+  EEPROM.put(address, password);
+  address += sizeof(password);
+  EEPROM.put(address, custom_name);
   EEPROM.commit();
   Serial.println("WiFi settings saved: SSID=" + String(ssid) + ", Custom Name=" + String(custom_name));
 }
