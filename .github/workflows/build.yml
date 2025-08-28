@@ -120,20 +120,18 @@ jobs:
           BIN_FILE=firmware-${{ env.FIRMWARE_VERSION }}.bin
           cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/$BIN_FILE
 
-          # index.html oluştur (EOF başı boşluk yok)
-          cat <<EOF > public/index.html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Horus Firmware</title>
-</head>
-<body>
-  <h1>Horus Firmware</h1>
-  <ul>
-    <li><a href="$BIN_FILE">$BIN_FILE</a></li>
-  </ul>
-</body>
-</html>
-EOF
+          # index.html oluştur
+          echo "<!DOCTYPE html>" > public/index.html
+          echo "<html lang='en'>" >> public/index.html
+          echo "<head>" >> public/index.html
+          echo "  <meta charset='UTF-8'>" >> public/index.html
+          echo "  <title>Horus Firmware</title>" >> public/index.html
+          echo "</head>" >> public/index.html
+          echo "<body>" >> public/index.html
+          echo "  <h1>Horus Firmware</h1>" >> public/index.html
+          echo "  <ul>" >> public/index.html
+          echo "    <li><a href=\"$BIN_FILE\">$BIN_FILE</a></li>" >> public/index.html
+          echo "  </ul>" >> public/index.html
+          echo "</body>" >> public/index.html
+          echo "</html>" >> public/index.html
 
