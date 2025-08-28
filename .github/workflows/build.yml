@@ -120,7 +120,7 @@ jobs:
           BIN_FILE=firmware-${{ env.FIRMWARE_VERSION }}.bin
           cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/$BIN_FILE
 
-          # index.html oluştur (YAML uyumlu)
+          # index.html oluştur (EOF başı boşluk yok)
           cat <<EOF > public/index.html
 <!DOCTYPE html>
 <html lang="en">
@@ -137,19 +137,3 @@ jobs:
 </html>
 EOF
 
-      - name: Pages Artifact Yükle
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
-
-  deploy:
-    needs: derle
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
