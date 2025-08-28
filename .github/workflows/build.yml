@@ -120,7 +120,7 @@ jobs:
           BIN_FILE=firmware-${{ env.FIRMWARE_VERSION }}.bin
           cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/$BIN_FILE
 
-          # index.html oluştur
+          # index.html oluştur (YAML uyumlu)
           cat <<EOF > public/index.html
 <!DOCTYPE html>
 <html lang="en">
