@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.39";
+const char* FIRMWARE_VERSION = "v1.0.40";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -657,14 +657,12 @@ String htmlPage() {
         .tab-content { display: none; }
         .theme-toggle { position: relative; width: 120px; height: 40px; }
         .theme-toggle input { display: none; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: 0.4s; border-radius: 34px; }
-        .slider:before { position: absolute; content: ''; height: 32px; width: 32px; left: 4px; bottom: 4px; background-color: white; transition: 0.4s; border-radius: 50%; }
-        input[value="system"]:checked ~ .slider { background-color: #6b7280; }
-        input[value="system"]:checked ~ .slider:before { transform: translateX(0px); content: '🌓'; display: flex; align-items: center; justify-content: center; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #6b7280; transition: 0.4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: '🌓'; height: 32px; width: 32px; left: 4px; bottom: 4px; background-color: white; transition: 0.4s; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
         input[value="dark"]:checked ~ .slider { background-color: #1f2937; }
-        input[value="dark"]:checked ~ .slider:before { transform: translateX(40px); content: '🌙'; display: flex; align-items: center; justify-content: center; }
+        input[value="dark"]:checked ~ .slider:before { transform: translateX(40px); content: '🌙'; }
         input[value="light"]:checked ~ .slider { background-color: #f59e0b; }
-        input[value="light"]:checked ~ .slider:before { transform: translateX(80px); content: '☀️'; display: flex; align-items: center; justify-content: center; }
+        input[value="light"]:checked ~ .slider:before { transform: translateX(80px); content: '☀️'; }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
@@ -673,11 +671,11 @@ String htmlPage() {
             <h1 class="text-2xl font-bold text-center">Horus by Wyntro</h1>
             <div class="theme-toggle">
                 <input type="radio" id="theme-system" name="theme" value="system" checked>
+                <label for="theme-system" class="slider"></label>
                 <input type="radio" id="theme-dark" name="theme" value="dark">
+                <label for="theme-dark" class="slider"></label>
                 <input type="radio" id="theme-light" name="theme" value="light">
-                <label class="slider" for="theme-system"></label>
-                <label class="slider" for="theme-dark"></label>
-                <label class="slider" for="theme-light"></label>
+                <label for="theme-light" class="slider"></label>
             </div>
         </div>
 
@@ -785,21 +783,17 @@ String htmlPage() {
 
         function applyTheme(theme) {
             const body = document.body;
+            localStorage.setItem('theme', theme);
+            document.querySelector(`input[name="theme"][value="${theme}"]`).checked = true;
             if (theme === 'system') {
-                localStorage.setItem('theme', 'system');
-                document.getElementById('theme-system').checked = true;
                 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     body.classList.add('dark');
                 } else {
                     body.classList.remove('dark');
                 }
             } else if (theme === 'dark') {
-                localStorage.setItem('theme', 'dark');
-                document.getElementById('theme-dark').checked = true;
                 body.classList.add('dark');
-            } else if (theme === 'light') {
-                localStorage.setItem('theme', 'light');
-                document.getElementById('theme-light').checked = true;
+            } else {
                 body.classList.remove('dark');
             }
         }
@@ -807,7 +801,8 @@ String htmlPage() {
         function initTheme() {
             const savedTheme = localStorage.getItem('theme') || 'system';
             applyTheme(savedTheme);
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            mediaQuery.addEventListener('change', () => {
                 if (localStorage.getItem('theme') === 'system') {
                     applyTheme('system');
                 }
@@ -1098,13 +1093,12 @@ String manualUpdatePage() {
     <style>
         .theme-toggle { position: relative; width: 120px; height: 40px; }
         .theme-toggle input { display: none; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: 0.4s; border-radius: 34px; }
-        .slider:before { position: absolute; content: ''; height: 32px; width: 32px; left: 4px; bottom: 4px; background-color: white; transition: 0.4s; border-radius: 50%; }
-        input[value="system"]:checked ~ .slider { background-color: #6b7280; }
-        input[value="system"]:checked ~ .slider:before { transform: translateX(0px); content: '🌓'; display: flex; align-items: center; justify-content: center; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #6b7280; transition: 0.4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: '🌓'; height: 32px; width: 32px; left: 4px; bottom: 4px; background-color: white; transition: 0.4s; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
         input[value="dark"]:checked ~ .slider { background-color: #1f2937; }
-        input[value="dark"]:checked ~ .slider:before { transform: translateX(40px); content: '🌙'; display: flex; align-items: center; justify-content: center; }
-        input[value="light"]:checked ~ .slider:before { transform: translateX(80px); content: '☀️'; display: flex; align-items: center; justify-content: center; }
+        input[value="dark"]:checked ~ .slider:before { transform: translateX(40px); content: '🌙'; }
+        input[value="light"]:checked ~ .slider { background-color: #f59e0b; }
+        input[value="light"]:checked ~ .slider:before { transform: translateX(80px); content: '☀️'; }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
@@ -1113,11 +1107,11 @@ String manualUpdatePage() {
             <h1 class="text-2xl font-bold text-center">Horus - Manuel Güncelleme</h1>
             <div class="theme-toggle">
                 <input type="radio" id="theme-system" name="theme" value="system" checked>
+                <label for="theme-system" class="slider"></label>
                 <input type="radio" id="theme-dark" name="theme" value="dark">
+                <label for="theme-dark" class="slider"></label>
                 <input type="radio" id="theme-light" name="theme" value="light">
-                <label class="slider" for="theme-system"></label>
-                <label class="slider" for="theme-dark"></label>
-                <label class="slider" for="theme-light"></label>
+                <label for="theme-light" class="slider"></label>
             </div>
         </div>
         <div class="space-y-4">
@@ -1135,21 +1129,17 @@ String manualUpdatePage() {
 
         function applyTheme(theme) {
             const body = document.body;
+            localStorage.setItem('theme', theme);
+            document.querySelector(`input[name="theme"][value="${theme}"]`).checked = true;
             if (theme === 'system') {
-                localStorage.setItem('theme', 'system');
-                document.getElementById('theme-system').checked = true;
                 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
                     body.classList.add('dark');
                 } else {
                     body.classList.remove('dark');
                 }
             } else if (theme === 'dark') {
-                localStorage.setItem('theme', 'dark');
-                document.getElementById('theme-dark').checked = true;
                 body.classList.add('dark');
-            } else if (theme === 'light') {
-                localStorage.setItem('theme', 'light');
-                document.getElementById('theme-light').checked = true;
+            } else {
                 body.classList.remove('dark');
             }
         }
@@ -1157,7 +1147,8 @@ String manualUpdatePage() {
         function initTheme() {
             const savedTheme = localStorage.getItem('theme') || 'system';
             applyTheme(savedTheme);
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            mediaQuery.addEventListener('change', () => {
                 if (localStorage.getItem('theme') === 'system') {
                     applyTheme('system');
                 }
