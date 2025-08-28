@@ -21,7 +21,7 @@ jobs:
           if [ -f WyntroHorus2.ino ]; then
             sed -i 's/\r$//' WyntroHorus2.ino
           else
-            echo "Hata: WyntroHorus2.ino bulunamadı, satır sonu dönüştürmesi atlandı"
+            echo "Hata: WyntroHorus2.ino bulunamadı, satır sonu dönüştürmesi atlandı."
           fi
 
       - name: Arduino CLI’yi Kur
@@ -121,22 +121,35 @@ jobs:
           cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/$BIN_FILE
 
           # index.html oluştur
-          echo "<!DOCTYPE html>
-<html lang='en'>
+          cat <<EOF > public/index.html
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset='UTF-8'>
+  <meta charset="UTF-8">
   <title>Horus Firmware</title>
 </head>
 <body>
   <h1>Horus Firmware</h1>
   <ul>
-    <li><a href='$BIN_FILE'>$BIN_FILE</a></li>
+    <li><a href="$BIN_FILE">$BIN_FILE</a></li>
   </ul>
 </body>
-</html>" > public/index.html
+</html>
+EOF
 
       - name: Pages Artifact Yükle
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
 
+  deploy:
+    needs: derle
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
