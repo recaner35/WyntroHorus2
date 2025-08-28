@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.36";
+const char* FIRMWARE_VERSION = "v1.0.37";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -490,7 +490,7 @@ void checkOTAUpdateTask(void *parameter) {
   Serial.println("checkOTAUpdateTask: Started.");
   HTTPClient http;
   http.setTimeout(10000);
-  http.setFollowRedirects(true); // Yönlendirmeleri takip et
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS); // Yönlendirmeleri takip et
   http.setRedirectLimit(5); // Maksimum 5 yönlendirme
   http.begin(github_url);
   http.addHeader("Accept", "application/vnd.github.v3+json");
@@ -530,7 +530,7 @@ void checkOTAUpdateTask(void *parameter) {
 
           http.end();
           http.begin(binUrl);
-          http.setFollowRedirects(true); // Yönlendirmeleri takip et
+          http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS); // Yönlendirmeleri takip et
           http.setRedirectLimit(5); // Maksimum 5 yönlendirme
           http.addHeader("User-Agent", "ESP32-WyntroHorus2");
           Serial.println("checkOTAUpdateTask: Initiating HTTP GET for firmware...");
