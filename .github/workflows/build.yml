@@ -105,3 +105,28 @@ jobs:
             Yeni firmware sürümü: ${{ env.FIRMWARE_VERSION }}
             - Otomatik derleme ve OTA desteği
             - WiFi tarama ve motor kontrolü iyileştirmeleri
+              - name: Binary'yi Pages için Hazırla
+        run: |
+          mkdir -p public
+          cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/firmware-${{ env.FIRMWARE_VERSION }}.bin
+
+      - name: Pages Artifact Yükle
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: derle
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
