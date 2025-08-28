@@ -2,7 +2,6 @@
 #include <WebServer.h>
 #include <FS.h>
 #include <WebSocketsServer.h>
-#include <ElegantOTA.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
@@ -96,14 +95,11 @@ void setup() {
   setupWebServer();
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
-  // ElegantOTA'nın manuel yükleme ekranını devre dışı bırakıyoruz
-  // ElegantOTA.begin(&server); // Bu satır kaldırıldı, artık manuel yükleme kullanılmayacak
 }
 
 void loop() {
   server.handleClient();
   webSocket.loop();
-  // ElegantOTA.loop(); // Manuel OTA devre dışı, bu yüzden kaldırıldı
   checkHourlyReset();
 }
 
@@ -268,7 +264,7 @@ void setupWiFi() {
 
 String sanitizeString(String input) {
   String result = input;
-  result.replace(" ", "-"); // Boşlukları tire ile değiştir
+  result.replace(" ", "-");
   String sanitized = "";
   for (int i = 0; i < result.length(); i++) {
     char c = result[i];
@@ -308,7 +304,7 @@ void setupWebServer() {
     xTaskCreate(
         checkOTAUpdateTask,
         "CheckOTAUpdateTask",
-        8192, // Yığın boyutunu artırdık, çünkü indirme işlemi daha fazla bellek gerektirebilir
+        8192,
         NULL,
         1,
         NULL);
@@ -451,7 +447,6 @@ void checkOTAUpdateTask(void *parameter) {
         statusDoc["otaStatus"] = "Yeni sürüm mevcut: " + latestVersion;
         statusDoc["updateAvailable"] = true;
 
-        // GitHub release'den .bin dosyasını indir
         String binUrl;
         for (JsonVariant asset : doc["assets"].as<JsonArray>()) {
           String name = asset["name"].as<String>();
@@ -468,7 +463,6 @@ void checkOTAUpdateTask(void *parameter) {
           serializeJson(statusDoc, json);
           webSocket.broadcastTXT(json);
 
-          // Firmware indirme ve güncelleme
           http.end();
           http.begin(binUrl);
           int httpCodeBin = http.GET();
@@ -586,11 +580,31 @@ String htmlPage() {
         .hidden { display: none; }
         .tab-content.active { display: block; }
         .tab-content { display: none; }
+        .theme-toggle { position: relative; width: 120px; height: 40px; }
+        .theme-toggle input { display: none; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: 0.4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ''; height: 32px; width: 32px; left: 4px; bottom: 4px; background-color: white; transition: 0.4s; border-radius: 50%; }
+        input[value="system"]:checked ~ .slider { background-color: #6b7280; }
+        input[value="system"]:checked ~ .slider:before { transform: translateX(0px); content: '🌓'; display: flex; align-items: center; justify-content: center; }
+        input[value="dark"]:checked ~ .slider { background-color: #1f2937; }
+        input[value="dark"]:checked ~ .slider:before { transform: translateX(40px); content: '🌙'; display: flex; align-items: center; justify-content: center; }
+        input[value="light"]:checked ~ .slider { background-color: #f59e0b; }
+        input[value="light"]:checked ~ .slider:before { transform: translateX(80px); content: '☀️'; display: flex; align-items: center; justify-content: center; }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
     <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-lg">
-        <h1 class="text-2xl font-bold mb-4 text-center">Horus by Wyntro</h1>
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold text-center">Horus by Wyntro</h1>
+            <div class="theme-toggle">
+                <input type="radio" id="theme-system" name="theme" value="system" checked>
+                <input type="radio" id="theme-dark" name="theme" value="dark">
+                <input type="radio" id="theme-light" name="theme" value="light">
+                <label class="slider" for="theme-system"></label>
+                <label class="slider" for="theme-dark"></label>
+                <label class="slider" for="theme-light"></label>
+            </div>
+        </div>
 
         <div class="flex justify-center mb-4 space-x-2 flex-wrap">
             <button onclick="openTab('motor')" class="tab-button bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="settings">Ayarlar</button>
@@ -693,6 +707,43 @@ String htmlPage() {
     <script>
         let ws = new WebSocket('ws://' + window.location.hostname + ':81/');
         let devices = JSON.parse(localStorage.getItem('horusDevices')) || [];
+
+        function applyTheme(theme) {
+            const body = document.body;
+            if (theme === 'system') {
+                localStorage.setItem('theme', 'system');
+                document.getElementById('theme-system').checked = true;
+                if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    body.classList.add('dark');
+                } else {
+                    body.classList.remove('dark');
+                }
+            } else if (theme === 'dark') {
+                localStorage.setItem('theme', 'dark');
+                document.getElementById('theme-dark').checked = true;
+                body.classList.add('dark');
+            } else if (theme === 'light') {
+                localStorage.setItem('theme', 'light');
+                document.getElementById('theme-light').checked = true;
+                body.classList.remove('dark');
+            }
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'system';
+            applyTheme(savedTheme);
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (localStorage.getItem('theme') === 'system') {
+                    applyTheme('system');
+                }
+            });
+        }
+
+        document.querySelectorAll('input[name="theme"]').forEach(input => {
+            input.addEventListener('change', () => {
+                applyTheme(input.value);
+            });
+        });
 
         ws.onmessage = function(event) {
             console.log('WebSocket message received: ' + event.data);
@@ -951,6 +1002,7 @@ String htmlPage() {
         window.onload = function() {
             openTab('motor');
             updateDeviceList();
+            initTheme();
         }
     </script>
 </body>
