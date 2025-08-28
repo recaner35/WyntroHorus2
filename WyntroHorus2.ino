@@ -7,6 +7,7 @@
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <EEPROM.h>
+#include <Update.h>
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
@@ -95,34 +96,14 @@ void setup() {
   setupWebServer();
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
-  ElegantOTA.begin(&server);
-
-  ElegantOTA.onStart([]() {
-    stopMotor();
-    Serial.println("OTA started, motor stopped.");
-  });
-  ElegantOTA.onEnd([](bool success) {
-    if (success) {
-      Serial.println("OTA update completed successfully!");
-    } else {
-      Serial.println("OTA update failed!");
-    }
-  });
-
-  xTaskCreatePinnedToCore(
-      runMotorTask,
-      "MotorTask",
-      4096,
-      NULL,
-      1,
-      &motorTaskHandle,
-      0);
+  // ElegantOTA'nın manuel yükleme ekranını devre dışı bırakıyoruz
+  // ElegantOTA.begin(&server); // Bu satır kaldırıldı, artık manuel yükleme kullanılmayacak
 }
 
 void loop() {
   server.handleClient();
   webSocket.loop();
-  ElegantOTA.loop();
+  // ElegantOTA.loop(); // Manuel OTA devre dışı, bu yüzden kaldırıldı
   checkHourlyReset();
 }
 
@@ -327,7 +308,7 @@ void setupWebServer() {
     xTaskCreate(
         checkOTAUpdateTask,
         "CheckOTAUpdateTask",
-        4096,
+        8192, // Yığın boyutunu artırdık, çünkü indirme işlemi daha fazla bellek gerektirebilir
         NULL,
         1,
         NULL);
@@ -458,6 +439,7 @@ void checkOTAUpdateTask(void *parameter) {
   int httpCode = http.GET();
   StaticJsonDocument<256> statusDoc;
   statusDoc["updateAvailable"] = false;
+
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
     StaticJsonDocument<1024> doc;
@@ -468,8 +450,77 @@ void checkOTAUpdateTask(void *parameter) {
       if (isNewVersionAvailable(latestVersion, currentVersion)) {
         statusDoc["otaStatus"] = "Yeni sürüm mevcut: " + latestVersion;
         statusDoc["updateAvailable"] = true;
+
+        // GitHub release'den .bin dosyasını indir
+        String binUrl;
+        for (JsonVariant asset : doc["assets"].as<JsonArray>()) {
+          String name = asset["name"].as<String>();
+          if (name.endsWith(".bin")) {
+            binUrl = asset["browser_download_url"].as<String>();
+            break;
+          }
+        }
+
+        if (binUrl.length() > 0) {
+          Serial.println("checkOTAUpdateTask: Downloading firmware from " + binUrl);
+          statusDoc["otaStatus"] = "Güncelleme indiriliyor: " + latestVersion;
+          String json;
+          serializeJson(statusDoc, json);
+          webSocket.broadcastTXT(json);
+
+          // Firmware indirme ve güncelleme
+          http.end();
+          http.begin(binUrl);
+          int httpCodeBin = http.GET();
+          if (httpCodeBin == HTTP_CODE_OK) {
+            size_t size = http.getSize();
+            if (size <= 0) {
+              statusDoc["otaStatus"] = "Hata: Dosya boyutu bilinmiyor.";
+              serializeJson(statusDoc, json);
+              webSocket.broadcastTXT(json);
+              Serial.println("checkOTAUpdateTask: Unknown file size.");
+              http.end();
+              vTaskDelete(NULL);
+              return;
+            }
+
+            if (Update.begin(size)) {
+              Serial.println("checkOTAUpdateTask: Starting OTA update, size: " + String(size));
+              WiFiClient *client = http.getStreamPtr();
+              size_t written = Update.writeStream(*client);
+              if (written == size) {
+                Serial.println("checkOTAUpdateTask: Firmware written successfully.");
+                if (Update.end(true)) {
+                  statusDoc["otaStatus"] = "Güncelleme başarılı! Yeniden başlatılıyor...";
+                  serializeJson(statusDoc, json);
+                  webSocket.broadcastTXT(json);
+                  Serial.println("checkOTAUpdateTask: Update completed, restarting...");
+                  delay(1000);
+                  ESP.restart();
+                } else {
+                  statusDoc["otaStatus"] = "Hata: Güncelleme tamamlanamadı.";
+                  Serial.println("checkOTAUpdateTask: Update failed to finalize.");
+                }
+              } else {
+                statusDoc["otaStatus"] = "Hata: Dosya yazma başarısız.";
+                Serial.println("checkOTAUpdateTask: Failed to write firmware, written: " + String(written));
+              }
+            } else {
+              statusDoc["otaStatus"] = "Hata: Güncelleme başlatılamadı, yetersiz alan.";
+              Serial.println("checkOTAUpdateTask: Update.begin failed, size: " + String(size));
+            }
+          } else {
+            statusDoc["otaStatus"] = "Hata: Dosya indirilemedi, HTTP " + String(httpCodeBin);
+            Serial.println("checkOTAUpdateTask: Failed to download firmware, HTTP code: " + String(httpCodeBin));
+          }
+          http.end();
+        } else {
+          statusDoc["otaStatus"] = "Hata: .bin dosyası bulunamadı.";
+          Serial.println("checkOTAUpdateTask: No .bin file found in release.");
+        }
       } else {
         statusDoc["otaStatus"] = "Firmware güncel: " + currentVersion;
+        Serial.println("checkOTAUpdateTask: Firmware is up to date: " + currentVersion);
       }
     } else {
       statusDoc["otaStatus"] = "OTA kontrol hatası: JSON parse error.";
@@ -632,7 +683,6 @@ String htmlPage() {
             </div>
             <div class="flex flex-col items-center space-y-2">
                 <button id="checkUpdateButton" onclick="checkUpdate()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="check_updates">Güncellemeleri Kontrol Et</button>
-                <button id="installUpdateButton" onclick="installUpdate()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200 hidden" data-translate="install_update">Güncellemeyi Yükle</button>
             </div>
         </div>
 
@@ -686,11 +736,8 @@ String htmlPage() {
                 if (data.otaStatus) {
                     otaStatusElement.innerText = data.otaStatus;
                     otaStatusElement.style.color = data.otaStatus.includes("güncel") ? 'green' :
-                                                  data.otaStatus.includes("Yeni sürüm") ? 'orange' : 'red';
-                }
-                if (data.updateAvailable != null) {
-                    document.getElementById('checkUpdateButton').classList.toggle('hidden', data.updateAvailable);
-                    document.getElementById('installUpdateButton').classList.toggle('hidden', !data.updateAvailable);
+                                                  data.otaStatus.includes("Yeni sürüm") ? 'orange' :
+                                                  data.otaStatus.includes("başarılı") ? 'green' : 'red';
                 }
                 if (data.customName != null) {
                     deviceNameElement.innerText = data.customName;
@@ -892,7 +939,6 @@ String htmlPage() {
         function checkUpdate() {
             document.getElementById('ota_status').innerText = "Güncellemeler kontrol ediliyor...";
             document.getElementById('ota_status').style.color = 'black';
-            document.getElementById('installUpdateButton').classList.add('hidden');
             fetch('/check_update')
                 .then(response => response.text())
                 .then(data => { console.log(data); })
@@ -900,10 +946,6 @@ String htmlPage() {
                     console.error('Hata:', error);
                     showMessage('Güncelleme kontrolü başlatılamadı.', 'error');
                 });
-        }
-
-        function installUpdate() {
-            window.location.href = "/update";
         }
 
         window.onload = function() {
