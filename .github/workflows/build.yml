@@ -117,23 +117,26 @@ jobs:
       - name: Binary'yi Pages için Hazırla
         run: |
           mkdir -p public
-          cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/firmware-${{ env.FIRMWARE_VERSION }}.bin
-          # İstersen sabit link için son satırı da aç:
-          # cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/firmware-latest.bin
+          BIN_FILE=firmware-${{ env.FIRMWARE_VERSION }}.bin
+          cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/$BIN_FILE
+
+          # index.html oluştur
+          echo "<!DOCTYPE html>
+<html lang='en'>
+<head>
+  <meta charset='UTF-8'>
+  <title>Horus Firmware</title>
+</head>
+<body>
+  <h1>Horus Firmware</h1>
+  <ul>
+    <li><a href='$BIN_FILE'>$BIN_FILE</a></li>
+  </ul>
+</body>
+</html>" > public/index.html
 
       - name: Pages Artifact Yükle
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
 
-  deploy:
-    needs: derle
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
