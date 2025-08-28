@@ -9,22 +9,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-
     - name: Download release asset
-      uses: dsaltares/fetch-gh-release-asset@v1.1.0
+      uses: robinraju/release-downloader@v1.8
       with:
-        repo: ${{ github.repository }}
-        version: latest
-        file: "*.bin"
-        token: ${{ secrets.GITHUB_TOKEN }}
+        repository: ${{ github.repository }}
+        tag: ${{ github.event.release.tag_name }}
+        fileName: "*.bin"
 
     - name: Upload to gh-pages
       run: |
         git config --global user.email "actions@github.com"
         git config --global user.name "GitHub Actions"
-        git clone --branch gh-pages https://github.com/${{ github.repository }} gh-pages
+        git clone --depth 1 --branch gh-pages https://github.com/${{ github.repository }} gh-pages
         cp *.bin gh-pages/
         cd gh-pages
         git add *.bin
