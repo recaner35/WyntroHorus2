@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.34";
+const char* FIRMWARE_VERSION = "v1.0.32";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -67,6 +67,7 @@ void handleSet();
 void handleScan();
 void handleSaveWiFi();
 void handleStatus();
+void handleManualUpdate();
 void stopMotor();
 void startMotor();
 void runMotorTask(void *parameter);
@@ -77,6 +78,7 @@ void resetMotor();
 void updateWebSocket();
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
 String htmlPage();
+String manualUpdatePage();
 bool isNewVersionAvailable(String latest, String current);
 void checkOTAUpdateTask(void *parameter);
 String sanitizeString(String input);
@@ -310,6 +312,8 @@ void setupWebServer() {
         NULL);
     server.send(200, "text/plain", "OTA check started.");
   });
+  server.on("/manual_update", HTTP_GET, []() { server.send(200, "text/html", manualUpdatePage()); });
+  server.on("/manual_update", HTTP_POST, handleManualUpdate);
   server.begin();
   Serial.println("setupWebServer: Web server started.");
 }
@@ -384,6 +388,62 @@ void handleStatus() {
   Serial.println("handleStatus: Status sent.");
 }
 
+void handleManualUpdate() {
+  StaticJsonDocument<256> statusDoc;
+  String json;
+
+  if (!server.hasArg("firmware")) {
+    statusDoc["otaStatus"] = "Hata: Dosya seçilmedi.";
+    serializeJson(statusDoc, json);
+    webSocket.broadcastTXT(json);
+    server.send(400, "text/plain", "No file uploaded.");
+    Serial.println("handleManualUpdate: No file uploaded.");
+    return;
+  }
+
+  HTTPUpload& upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    Serial.println("handleManualUpdate: Starting firmware upload...");
+    statusDoc["otaStatus"] = "Dosya yükleniyor...";
+    serializeJson(statusDoc, json);
+    webSocket.broadcastTXT(json);
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+      statusDoc["otaStatus"] = "Hata: Güncelleme başlatılamadı.";
+      serializeJson(statusDoc, json);
+      webSocket.broadcastTXT(json);
+      Serial.println("handleManualUpdate: Update.begin failed.");
+      server.send(500, "text/plain", "Update begin failed.");
+      return;
+    }
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      statusDoc["otaStatus"] = "Hata: Dosya yazma başarısız.";
+      serializeJson(statusDoc, json);
+      webSocket.broadcastTXT(json);
+      Serial.println("handleManualUpdate: Failed to write firmware.");
+      server.send(500, "text/plain", "Failed to write firmware.");
+      return;
+    }
+    Serial.printf("handleManualUpdate: Wrote %d bytes\n", upload.currentSize);
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (Update.end(true)) {
+      statusDoc["otaStatus"] = "Güncelleme başarılı! Yeniden başlatılıyor...";
+      serializeJson(statusDoc, json);
+      webSocket.broadcastTXT(json);
+      Serial.println("handleManualUpdate: Firmware update completed, restarting...");
+      server.send(200, "text/plain", "Firmware updated successfully.");
+      delay(1000);
+      ESP.restart();
+    } else {
+      statusDoc["otaStatus"] = "Hata: Güncelleme tamamlanamadı.";
+      serializeJson(statusDoc, json);
+      webSocket.broadcastTXT(json);
+      Serial.println("handleManualUpdate: Update failed to finalize.");
+      server.send(500, "text/plain", "Update failed to finalize.");
+    }
+  }
+}
+
 void resetMotor() {
   stopMotor();
   turnsPerDay = 600;
@@ -430,8 +490,12 @@ void checkOTAUpdateTask(void *parameter) {
   Serial.println("checkOTAUpdateTask: Started.");
   HTTPClient http;
   http.setTimeout(10000);
+  http.setFollowRedirects(true); // Yönlendirmeleri takip et
+  http.setRedirectLimit(5); // Maksimum 5 yönlendirme
   http.begin(github_url);
   http.addHeader("Accept", "application/vnd.github.v3+json");
+  http.addHeader("User-Agent", "ESP32-WyntroHorus2"); // GitHub için User-Agent
+  Serial.println("checkOTAUpdateTask: Fetching latest release...");
   int httpCode = http.GET();
   StaticJsonDocument<256> statusDoc;
   statusDoc["updateAvailable"] = false;
@@ -443,6 +507,7 @@ void checkOTAUpdateTask(void *parameter) {
     if (!error) {
       String latestVersion = doc["tag_name"].as<String>();
       String currentVersion = String(FIRMWARE_VERSION);
+      Serial.println("checkOTAUpdateTask: Latest version: " + latestVersion + ", Current version: " + currentVersion);
       if (isNewVersionAvailable(latestVersion, currentVersion)) {
         statusDoc["otaStatus"] = "Yeni sürüm mevcut: " + latestVersion;
         statusDoc["updateAvailable"] = true;
@@ -465,9 +530,14 @@ void checkOTAUpdateTask(void *parameter) {
 
           http.end();
           http.begin(binUrl);
+          http.setFollowRedirects(true); // Yönlendirmeleri takip et
+          http.setRedirectLimit(5); // Maksimum 5 yönlendirme
+          http.addHeader("User-Agent", "ESP32-WyntroHorus2");
+          Serial.println("checkOTAUpdateTask: Initiating HTTP GET for firmware...");
           int httpCodeBin = http.GET();
           if (httpCodeBin == HTTP_CODE_OK) {
             size_t size = http.getSize();
+            Serial.println("checkOTAUpdateTask: File size: " + String(size));
             if (size <= 0) {
               statusDoc["otaStatus"] = "Hata: Dosya boyutu bilinmiyor.";
               serializeJson(statusDoc, json);
@@ -505,7 +575,12 @@ void checkOTAUpdateTask(void *parameter) {
             }
           } else {
             statusDoc["otaStatus"] = "Hata: Dosya indirilemedi, HTTP " + String(httpCodeBin);
+            serializeJson(statusDoc, json);
+            webSocket.broadcastTXT(json);
             Serial.println("checkOTAUpdateTask: Failed to download firmware, HTTP code: " + String(httpCodeBin));
+            http.end();
+            vTaskDelete(NULL);
+            return;
           }
           http.end();
         } else {
@@ -517,7 +592,7 @@ void checkOTAUpdateTask(void *parameter) {
         Serial.println("checkOTAUpdateTask: Firmware is up to date: " + currentVersion);
       }
     } else {
-      statusDoc["otaStatus"] = "OTA kontrol hatası: JSON parse error.";
+      statusDoc["otaStatus"] = "OTA kontrol hatası: JSON parse error: " + String(error.c_str());
       Serial.println("checkOTAUpdateTask: JSON parse error: " + String(error.c_str()));
     }
   } else {
@@ -1004,6 +1079,152 @@ String htmlPage() {
             updateDeviceList();
             initTheme();
         }
+    </script>
+</body>
+</html>
+)rawliteral";
+  return page;
+}
+
+String manualUpdatePage() {
+  String page = R"rawliteral(
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horus - Manuel Güncelleme</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .theme-toggle { position: relative; width: 120px; height: 40px; }
+        .theme-toggle input { display: none; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: 0.4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ''; height: 32px; width: 32px; left: 4px; bottom: 4px; background-color: white; transition: 0.4s; border-radius: 50%; }
+        input[value="system"]:checked ~ .slider { background-color: #6b7280; }
+        input[value="system"]:checked ~ .slider:before { transform: translateX(0px); content: '🌓'; display: flex; align-items: center; justify-content: center; }
+        input[value="dark"]:checked ~ .slider { background-color: #1f2937; }
+        input[value="dark"]:checked ~ .slider:before { transform: translateX(40px); content: '🌙'; display: flex; align-items: center; justify-content: center; }
+        input[value="light"]:checked ~ .slider:before { transform: translateX(80px); content: '☀️'; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-lg">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold text-center">Horus - Manuel Güncelleme</h1>
+            <div class="theme-toggle">
+                <input type="radio" id="theme-system" name="theme" value="system" checked>
+                <input type="radio" id="theme-dark" name="theme" value="dark">
+                <input type="radio" id="theme-light" name="theme" value="light">
+                <label class="slider" for="theme-system"></label>
+                <label class="slider" for="theme-dark"></label>
+                <label class="slider" for="theme-light"></label>
+            </div>
+        </div>
+        <div class="space-y-4">
+            <p class="text-center">Firmware dosyasını seçin (.bin):</p>
+            <input type="file" id="firmware" accept=".bin" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
+            <div class="flex justify-center">
+                <button onclick="uploadFirmware()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Güncellemeyi Yükle</button>
+            </div>
+            <p id="upload_status" class="text-center text-sm font-semibold"></p>
+        </div>
+    </div>
+
+    <script>
+        let ws = new WebSocket('ws://' + window.location.hostname + ':81/');
+
+        function applyTheme(theme) {
+            const body = document.body;
+            if (theme === 'system') {
+                localStorage.setItem('theme', 'system');
+                document.getElementById('theme-system').checked = true;
+                if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    body.classList.add('dark');
+                } else {
+                    body.classList.remove('dark');
+                }
+            } else if (theme === 'dark') {
+                localStorage.setItem('theme', 'dark');
+                document.getElementById('theme-dark').checked = true;
+                body.classList.add('dark');
+            } else if (theme === 'light') {
+                localStorage.setItem('theme', 'light');
+                document.getElementById('theme-light').checked = true;
+                body.classList.remove('dark');
+            }
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'system';
+            applyTheme(savedTheme);
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+                if (localStorage.getItem('theme') === 'system') {
+                    applyTheme('system');
+                }
+            });
+        }
+
+        document.querySelectorAll('input[name="theme"]').forEach(input => {
+            input.addEventListener('change', () => {
+                applyTheme(input.value);
+            });
+        });
+
+        ws.onmessage = function(event) {
+            console.log('WebSocket message received: ' + event.data);
+            try {
+                let data = JSON.parse(event.data);
+                const uploadStatusElement = document.getElementById('upload_status');
+                if (data.otaStatus) {
+                    uploadStatusElement.innerText = data.otaStatus;
+                    uploadStatusElement.style.color = data.otaStatus.includes("başarılı") ? 'green' : 'red';
+                }
+            } catch (e) {
+                console.error("JSON parse error:", e);
+            }
+        };
+
+        function uploadFirmware() {
+            const fileInput = document.getElementById('firmware');
+            const file = fileInput.files[0];
+            const uploadStatusElement = document.getElementById('upload_status');
+            if (!file) {
+                uploadStatusElement.innerText = 'Hata: Dosya seçilmedi.';
+                uploadStatusElement.style.color = 'red';
+                return;
+            }
+            if (!file.name.endsWith('.bin')) {
+                uploadStatusElement.innerText = 'Hata: Yalnızca .bin dosyaları desteklenir.';
+                uploadStatusElement.style.color = 'red';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('firmware', file);
+            uploadStatusElement.innerText = 'Dosya yükleniyor...';
+            uploadStatusElement.style.color = 'black';
+            fetch('/manual_update', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log('Dosya yüklendi.');
+                } else {
+                    uploadStatusElement.innerText = 'Hata: Dosya yüklenemedi.';
+                    uploadStatusElement.style.color = 'red';
+                }
+            })
+            .catch(error => {
+                console.error('Hata:', error);
+                uploadStatusElement.innerText = 'Hata: Yükleme sırasında bir sorun oluştu.';
+                uploadStatusElement.style.color = 'red';
+            });
+        }
+
+        window.onload = function() {
+            initTheme();
+        };
     </script>
 </body>
 </html>
