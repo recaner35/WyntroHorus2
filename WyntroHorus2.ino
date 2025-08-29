@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.46";
+const char* FIRMWARE_VERSION = "v1.0.47";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -683,17 +683,13 @@ String htmlPage() {
     <script>
         // Tailwind yapılandırması
         tailwind.config = {
-            // DÜZELTME 1: Dark mode stratejisi açıkça belirtildi.
             darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
                         gray: {
-                            100: '#f3f4f6',
-                            600: '#4b5563',
-                            700: '#374151',
-                            800: '#1f2937',
-                            900: '#111827'
+                            100: '#f3f4f6', 600: '#4b5563', 700: '#374151',
+                            800: '#1f2937', 900: '#111827'
                         },
                         blue: { 500: '#3b82f6', 600: '#2563eb' },
                         red: { 500: '#ef4444', 600: '#dc2626' },
@@ -704,11 +700,8 @@ String htmlPage() {
                 }
             },
             corePlugins: {
-                preflight: true,
-                container: false,
-                accessibility: false
+                preflight: true, container: false, accessibility: false
             },
-            // DÜZELTME 2: Eksik dark mode sınıfları güvenli listeye eklendi.
             safelist: [
                 'bg-gray-100', 'bg-gray-800', 'bg-gray-900', 'text-gray-100', 'text-gray-900',
                 'bg-blue-500', 'hover:bg-blue-600', 'bg-red-500', 'hover:bg-red-600',
@@ -741,6 +734,17 @@ String htmlPage() {
         #theme-system:checked + label { background-color: #4b5563; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
         #theme-dark:checked + label { background-color: #111827; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
         #theme-light:checked + label { background-color: #d97706; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
+        
+        /* DÜZELTME: Hatalı olan '.dark body' seçicisi 'body.dark' olarak değiştirildi. */
+        body.dark { 
+            background-color: #111827; /* bg-gray-900 */
+            color: #f3f4f6; /* text-gray-100 */
+        }
+        /* Bu kural zaten doğruydu ama tutarlılık için onu da Tailwind sınıfları halleder. */
+        /* Yine de bırakmakta sakınca yok. */
+        .dark .bg-white { 
+            background-color: #1f2937; /* bg-gray-800 */
+        }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
@@ -1224,7 +1228,7 @@ String manualUpdatePage() {
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin 2s linear infinite; }
         .hidden { display: none; }
-        .dark body { background-color: #111827; color: #f3f4f6; }
+        body.dark { background-color: #111827; color: #f3f4f6; }
         .dark .bg-white { background-color: #1f2937; }
     </style>
 </head>
