@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.47";
+const char* FIRMWARE_VERSION = "v1.0.48";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -274,14 +274,39 @@ void setupWiFi() {
 
 String sanitizeString(String input) {
   String result = input;
+  // Türkçe karakterleri dönüştür
+  result.replace("ç", "c");
+  result.replace("Ç", "C");
+  result.replace("ş", "s");
+  result.replace("Ş", "S");
+  result.replace("ı", "i");
+  result.replace("İ", "I");
+  result.replace("ğ", "g");
+  result.replace("Ğ", "G");
+  result.replace("ü", "u");
+  result.replace("Ü", "U");
+  result.replace("ö", "o");
+  result.replace("Ö", "O");
+  // Boşlukları tire ile değiştir
   result.replace(" ", "-");
+  // Diğer tüm özel karakterleri tire ile değiştir
   String sanitized = "";
   for (int i = 0; i < result.length(); i++) {
     char c = result[i];
     if (isAlphaNumeric(c) || c == '-') {
       sanitized += c;
+    } else {
+      sanitized += "-";
     }
   }
+  // Birden fazla tireyi tek tireye indirge
+  while (sanitized.indexOf("--") != -1) {
+    sanitized.replace("--", "-");
+  }
+  // Başta ve sonda tire varsa kaldır
+  sanitized.trim();
+  while (sanitized.startsWith("-")) sanitized.remove(0, 1);
+  while (sanitized.endsWith("-")) sanitized.remove(sanitized.length() - 1, 1);
   return sanitized;
 }
 
