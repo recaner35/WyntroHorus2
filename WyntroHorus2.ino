@@ -83,7 +83,7 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   Serial.println("LittleFS başlatılıyor...");
-  if (!LITTLEFS.begin(true)) {
+  if (!LittleFS.begin(true)) {
     Serial.println("Failed to mount LittleFS!");
     return;
   }
