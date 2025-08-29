@@ -121,7 +121,6 @@ void stepMotor(int step) {
   digitalWrite(IN2, steps[step][1] ? HIGH : LOW);
   digitalWrite(IN3, steps[step][2] ? HIGH : LOW);
   digitalWrite(IN4, steps[step][3] ? HIGH : LOW);
-  Serial.printf("stepMotor: Step %d\n", step);
 }
 
 void stopMotor() {
@@ -249,11 +248,12 @@ void writeWiFiSettings() {
 void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   WiFi.mode(WIFI_AP_STA);
-  if (!WiFi.softAP(default_ssid, default_password)) {
+  setupMDNS(); // Ensure mDNS_hostname is set before starting AP
+  if (!WiFi.softAP(mDNS_hostname, default_password)) {
     Serial.println("setupWiFi: Failed to start AP!");
     while (true);
   }
-  Serial.println("setupWiFi: AP started: " + String(default_ssid) + ", IP: " + WiFi.softAPIP().toString());
+  Serial.println("setupWiFi: AP started: " + String(mDNS_hostname) + ", IP: " + WiFi.softAPIP().toString());
   if (strlen(ssid) > 0 && strlen(password) >= 8) {
     WiFi.begin(ssid, password);
     int attempts = 0;
@@ -365,7 +365,7 @@ void handleScan() {
   int n = WiFi.scanNetworks();
   for (int i = 0; i < n; i++) {
     String ssid_scan = WiFi.SSID(i);
-    options += "<option value=\"" + ssid_scan + "\">" + ssid_scan + " (RSSI: " + String(WiFi.RSSI(i)) + " dBm)</option>";
+    options += "<option value=\"" + ssid_scan + "\">" + ssid_scan + "</option>";
   }
   Serial.println("handleScan: WiFi scan completed, found " + String(n) + " networks.");
   server.send(200, "text/plain", options);
@@ -648,7 +648,7 @@ void updateWebSocket() {
   doc["turnDuration"] = turnDuration;
   doc["direction"] = direction;
   doc["customName"] = custom_name;
-  doc["currentSSID"] = WiFi.SSID() != "" ? WiFi.SSID() : String(default_ssid);
+  doc["currentSSID"] = WiFi.SSID() != "" ? WiFi.SSID() : String(mDNS_hostname);
   doc["connectionStatus"] = WiFi.status() == WL_CONNECTED ? "Bağlandı" : "Hotspot modunda";
   doc["mDNS"] = String(mDNS_hostname) + ".local";
   String json;
@@ -681,7 +681,6 @@ String htmlPage() {
     <title>Horus by Wyntro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // Tailwind yapılandırması
         tailwind.config = {
             darkMode: 'class',
             theme: {
@@ -711,7 +710,6 @@ String htmlPage() {
                 'dark:border-gray-600', 'dark:text-gray-100'
             ]
         };
-        // Tailwind CDN uyarısını bastır
         console.warn = function() {};
     </script>
     <style>
@@ -734,16 +732,12 @@ String htmlPage() {
         #theme-system:checked + label { background-color: #4b5563; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
         #theme-dark:checked + label { background-color: #111827; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
         #theme-light:checked + label { background-color: #d97706; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
-        
-        /* DÜZELTME: Hatalı olan '.dark body' seçicisi 'body.dark' olarak değiştirildi. */
         body.dark { 
-            background-color: #111827; /* bg-gray-900 */
-            color: #f3f4f6; /* text-gray-100 */
+            background-color: #111827;
+            color: #f3f4f6;
         }
-        /* Bu kural zaten doğruydu ama tutarlılık için onu da Tailwind sınıfları halleder. */
-        /* Yine de bırakmakta sakınca yok. */
         .dark .bg-white { 
-            background-color: #1f2937; /* bg-gray-800 */
+            background-color: #1f2937;
         }
     </style>
 </head>
@@ -794,7 +788,7 @@ String htmlPage() {
                     </label>
                     <label class="flex items-center">
                         <input type="radio" name="dir" value="3" class="mr-2">
-                        <span data-translate="both">İkisi</span>
+                        <span data-translate="both">Çift Yönlü</span>
                     </label>
                 </div>
             </div>
@@ -817,7 +811,7 @@ String htmlPage() {
                 <input type="password" id="wifi_password" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
             </div>
             <div class="flex justify-center space-x-2">
-                <button onclick="scanWiFi()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="scan_networks">Ağları Tara</button>
+                <button id="scanButton" onclick="scanWiFi()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="scan_networks">Ağları Tara</button>
                 <button onclick="saveWiFi()" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="save_restart">Kaydet & Yeniden Başlat</button>
             </div>
         </div>
@@ -856,7 +850,6 @@ String htmlPage() {
     </div>
 
     <script>
-        // Tailwind yüklenmesini bekle
         function waitForTailwind(callback) {
             if (typeof tailwind !== 'undefined') {
                 console.log('waitForTailwind: Tailwind loaded');
@@ -918,6 +911,7 @@ String htmlPage() {
                 applyTheme(e.target.value);
             });
         });
+
         ws.onmessage = function(event) {
             console.log('WebSocket message received: ' + event.data);
             try {
@@ -962,6 +956,10 @@ String htmlPage() {
                     otaStatusElement.style.color = data.otaStatus.includes("güncel") ? 'green' :
                                                   data.otaStatus.includes("Yeni sürüm") ? 'orange' :
                                                   data.otaStatus.includes("başarılı") ? 'green' : 'red';
+                    if (data.otaStatus.includes("başarılı") || data.otaStatus.includes("güncel") || data.otaStatus.includes("Hata")) {
+                        document.getElementById('checkUpdateButton').innerText = 'Güncellemeleri Kontrol Et';
+                        document.getElementById('checkUpdateButton').disabled = false;
+                    }
                 }
                 if (data.customName != null) {
                     deviceNameElement.innerText = data.customName;
@@ -970,16 +968,13 @@ String htmlPage() {
                 if (data.mDNS) mDNSElement.innerText = data.mDNS;
                 if (data.currentSSID != null) currentSSIDElement.innerText = data.currentSSID;
                 if (data.connectionStatus != null) connectionStatusElement.innerText = data.connectionStatus;
-                if (data.motorStatus) {
-                    motorStatusElement.innerText = data.motorStatus;
-                    motorStatusElement.style.color = data.motorStatus.includes("Hata") ? 'red' : 'green';
-                }
             } catch (e) {
                 console.error("JSON parse error:", e);
                 console.log("Received data:", event.data);
                 showMessage('WebSocket veri hatası.', 'error');
             }
         };
+
         function openTab(tabName) {
             const tabs = document.querySelectorAll('.tab-content');
             tabs.forEach(tab => tab.classList.remove('active'));
@@ -1015,7 +1010,6 @@ String htmlPage() {
                 })
                 .then(data => {
                     console.log(`sendCommand: Response: ${data}`);
-                    showMessage(`Komut gönderildi: ${action}`);
                 })
                 .catch(error => {
                     console.error('sendCommand: Error:', error);
@@ -1024,15 +1018,21 @@ String htmlPage() {
         }
 
         function scanWiFi() {
+            const scanButton = document.getElementById('scanButton');
+            scanButton.innerText = 'Taranıyor...';
+            scanButton.disabled = true;
             fetch('/scan')
                 .then(response => response.text())
                 .then(data => {
                     document.getElementById('ssid').innerHTML = data;
                     console.log('WiFi seçenekleri yüklendi.');
-                    showMessage('WiFi ağları tarandı.');
+                    scanButton.innerText = 'Yeniden Tara';
+                    scanButton.disabled = false;
                 })
                 .catch(error => {
                     console.error('Hata:', error);
+                    scanButton.innerText = 'Yeniden Tara';
+                    scanButton.disabled = false;
                     showMessage('WiFi tarama hatası.', 'error');
                 });
         }
@@ -1118,7 +1118,7 @@ String htmlPage() {
                         const deviceDiv = document.createElement('div');
                         deviceDiv.className = 'border p-2 rounded dark:border-gray-600';
                         deviceDiv.innerHTML = `
-                            <p><strong>${domain}</strong>: ${data.status} (Turlar: ${data.completedTurns}, Günlük: ${data.turnsPerDay}, Süre: ${data.turnDuration}s, Yön: ${data.direction == 1 ? 'Saat Yönü' : data.direction == 2 ? 'Saat Yönü Ters' : 'İkisi'})</p>
+                            <p><strong>${domain}</strong>: ${data.status} (Turlar: ${data.completedTurns}, Günlük: ${data.turnsPerDay}, Süre: ${data.turnDuration}s, Yön: ${data.direction == 1 ? 'Saat Yönü' : data.direction == 2 ? 'Saat Yönü Ters' : 'Çift Yönlü'})</p>
                             <div class="flex justify-between space-x-2 mt-2">
                                 <button onclick="controlDevice('${domain}', 'start')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded text-sm" data-translate="start">Başlat</button>
                                 <button onclick="controlDevice('${domain}', 'stop')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-sm" data-translate="stop">Durdur</button>
@@ -1151,7 +1151,6 @@ String htmlPage() {
                 .then(response => response.text())
                 .then(data => {
                     console.log(data);
-                    showMessage(`Komut gönderildi (${domain}): ${action}`);
                     updateDeviceList();
                 })
                 .catch(error => {
@@ -1168,13 +1167,18 @@ String htmlPage() {
         }
 
         function checkUpdate() {
-            document.getElementById('ota_status').innerText = "Güncellemeler kontrol ediliyor...";
-            document.getElementById('ota_status').style.color = 'black';
+            const updateButton = document.getElementById('checkUpdateButton');
+            updateButton.innerText = 'Kontrol Ediliyor...';
+            updateButton.disabled = true;
             fetch('/check_update')
                 .then(response => response.text())
-                .then(data => { console.log(data); })
+                .then(data => {
+                    console.log(data);
+                })
                 .catch(error => {
                     console.error('Hata:', error);
+                    updateButton.innerText = 'Güncellemeleri Kontrol Et';
+                    updateButton.disabled = false;
                     showMessage('Güncelleme kontrolü başlatılamadı.', 'error');
                 });
         }
@@ -1205,7 +1209,6 @@ String manualUpdatePage() {
     <title>Horus - Manuel Güncelleme</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // Tailwind yapılandırması
         tailwind.config = {
             theme: {
                 extend: {
@@ -1221,7 +1224,6 @@ String manualUpdatePage() {
                        'bg-blue-500', 'hover:bg-blue-600', 'bg-red-500', 'hover:bg-red-600',
                        'dark:bg-gray-700', 'dark:border-gray-600', 'dark:text-gray-100']
         };
-        // Tailwind CDN uyarısını bastır
         console.warn = function() {};
     </script>
     <style>
