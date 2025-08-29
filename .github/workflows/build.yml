@@ -47,11 +47,12 @@ jobs:
           wget https://github.com/earlephilhower/mklittlefs/releases/download/4.0.2/x86_64-linux-gnu-mklittlefs-db0513a.tar.gz
           tar -xzf x86_64-linux-gnu-mklittlefs-db0513a.tar.gz
           ls -la  # Çıkarılan dosyaları listele
-          if [ -f mklittlefs ]; then
-            sudo mv mklittlefs /usr/local/bin/
+          if [ -f mklittlefs/mklittlefs ]; then
+            sudo mv mklittlefs/mklittlefs /usr/local/bin/mklittlefs
             sudo chmod +x /usr/local/bin/mklittlefs
           else
             echo "Hata: mklittlefs binary dosyası bulunamadı!"
+            ls -la mklittlefs/
             exit 1
           fi
           if [ -d data ]; then
