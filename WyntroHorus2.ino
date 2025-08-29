@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.43";
+const char* FIRMWARE_VERSION = "v1.0.44";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -689,6 +689,43 @@ String htmlPage() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Horus by Wyntro</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Tailwind yapılandırması: yalnızca kullanılan sınıflar
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            100: '#f3f4f6',
+                            600: '#4b5563',
+                            700: '#374151',
+                            800: '#1f2937',
+                            900: '#111827'
+                        },
+                        blue: { 500: '#3b82f6', 600: '#2563eb' },
+                        red: { 500: '#ef4444', 600: '#dc2626' },
+                        green: { 500: '#22c55e', 600: '#16a34a' },
+                        purple: { 500: '#8b5cf6', 600: '#7c3aed' },
+                        yellow: { 500: '#eab308', 600: '#ca8a04' }
+                    }
+                }
+            },
+            corePlugins: {
+                preflight: true,
+                container: false,
+                accessibility: false
+            },
+            safelist: [
+                'bg-gray-100', 'bg-gray-800', 'bg-gray-900', 'text-gray-100', 'text-gray-900',
+                'bg-blue-500', 'hover:bg-blue-600', 'bg-red-500', 'hover:bg-red-600',
+                'bg-green-500', 'hover:bg-green-600', 'bg-purple-500', 'hover:bg-purple-600',
+                'bg-yellow-500', 'hover:bg-yellow-600', 'bg-gray-500', 'hover:bg-gray-600',
+                'dark:bg-gray-700', 'dark:border-gray-600', 'dark:text-gray-100'
+            ]
+        };
+        // Tailwind CDN uyarısını bastır
+        console.warn = function() {};
+    </script>
     <style>
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin 2s linear infinite; }
@@ -700,15 +737,18 @@ String htmlPage() {
         .theme-toggle label { 
             display: inline-flex; align-items: center; justify-content: center;
             width: 40px; height: 40px; cursor: pointer; 
-            border-radius: 50%; transition: background-color 0.3s;
-            font-size: 20px; /* Emoji boyutu */
+            border-radius: 50%; transition: background-color 0.3s, box-shadow 0.3s;
+            font-size: 20px;
         }
         #theme-system + label { background-color: #6b7280; }
         #theme-dark + label { background-color: #1f2937; }
         #theme-light + label { background-color: #f59e0b; }
-        #theme-system:checked + label { background-color: #4b5563; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
-        #theme-dark:checked + label { background-color: #111827; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
-        #theme-light:checked + label { background-color: #d97706; box-shadow: 0 0 5px rgba(0,0,0,0.5); }
+        #theme-system:checked + label { background-color: #4b5563; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
+        #theme-dark:checked + label { background-color: #111827; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
+        #theme-light:checked + label { background-color: #d97706; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
+        /* Tailwind karanlık mod için ek stiller */
+        .dark body { background-color: #111827; color: #f3f4f6; }
+        .dark .bg-white { background-color: #1f2937; }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
@@ -824,6 +864,17 @@ String htmlPage() {
     </div>
 
     <script>
+        // Tailwind yüklenmesini bekle
+        function waitForTailwind(callback) {
+            if (typeof tailwind !== 'undefined') {
+                console.log('waitForTailwind: Tailwind loaded');
+                callback();
+            } else {
+                console.log('waitForTailwind: Waiting for Tailwind...');
+                setTimeout(() => waitForTailwind(callback), 100);
+            }
+        }
+
         let ws = new WebSocket('ws://' + window.location.hostname + ':81/');
         let devices = JSON.parse(localStorage.getItem('horusDevices')) || [];
 
@@ -831,7 +882,12 @@ String htmlPage() {
             console.log('applyTheme: Applying theme:', theme);
             const body = document.body;
             localStorage.setItem('theme', theme);
-            document.querySelector(`input[name="theme"][value="${theme}"]`).checked = true;
+            const themeInput = document.querySelector(`input[name="theme"][value="${theme}"]`);
+            if (themeInput) {
+                themeInput.checked = true;
+            } else {
+                console.error('applyTheme: Theme input not found for', theme);
+            }
             if (theme === 'system') {
                 console.log('applyTheme: System theme, checking prefers-color-scheme');
                 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -851,6 +907,7 @@ String htmlPage() {
         }
 
         function initTheme() {
+            console.log('initTheme: Starting theme initialization');
             const savedTheme = localStorage.getItem('theme') || 'system';
             console.log('initTheme: Initializing with theme:', savedTheme);
             applyTheme(savedTheme);
@@ -1134,9 +1191,12 @@ String htmlPage() {
 
         window.onload = function() {
             console.log('window.onload: Initializing');
-            openTab('motor');
-            updateDeviceList();
-            initTheme();
+            waitForTailwind(() => {
+                console.log('window.onload: Tailwind ready, initializing tabs and theme');
+                openTab('motor');
+                updateDeviceList();
+                initTheme();
+            });
         }
     </script>
 </body>
@@ -1154,24 +1214,44 @@ String manualUpdatePage() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Horus - Manuel Güncelleme</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Tailwind yapılandırması
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gray: { 100: '#f3f4f6', 700: '#374151', 800: '#1f2937', 900: '#111827' },
+                        blue: { 500: '#3b82f6', 600: '#2563eb' },
+                        red: { 500: '#ef4444', 600: '#dc2626' }
+                    }
+                }
+            },
+            corePlugins: { preflight: true, container: false, accessibility: false },
+            safelist: ['bg-gray-100', 'bg-gray-800', 'bg-gray-900', 'text-gray-100', 'text-gray-900',
+                       'bg-blue-500', 'hover:bg-blue-600', 'bg-red-500', 'hover:bg-red-600',
+                       'dark:bg-gray-700', 'dark:border-gray-600', 'dark:text-gray-100']
+        };
+        // Tailwind CDN uyarısını bastır
+        console.warn = function() {};
+    </script>
     <style>
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin-slow { animation: spin 2s linear infinite; }
         .hidden { display: none; }
+        .dark body { background-color: #111827; color: #f3f4f6; }
+        .dark .bg-white { background-color: #1f2937; }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
     <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-lg">
         <h1 class="text-2xl font-bold text-center mb-4">Horus - Manuel Güncelleme</h1>
-        <form id="uploadForm" enctype="multipart/form-data" method="post" action="/manual_update">
-            <div class="mb-4">
-                <label class="block text-sm font-medium mb-2" for="firmware">Firmware Dosyası (.bin)</label>
-                <input type="file" id="firmware" name="firmware" accept=".bin" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
-            </div>
-            <div class="flex justify-center">
-                <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Yükle</button>
-            </div>
-        </form>
+        <div class="mb-4">
+            <label class="block text-sm font-medium mb-2" for="firmware">Firmware Dosyası (.bin)</label>
+            <input type="file" id="firmware" name="firmware" accept=".bin" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
+        </div>
+        <div class="flex justify-center">
+            <button onclick="uploadFirmware()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Yükle</button>
+        </div>
         <p id="ota_status" class="text-center mt-4 text-sm font-semibold"></p>
         <p id="message_box" class="text-center mt-4 text-sm font-semibold"></p>
     </div>
@@ -1195,8 +1275,7 @@ String manualUpdatePage() {
             }
         };
 
-        document.getElementById('uploadForm').addEventListener('submit', function(e) {
-            e.preventDefault();
+        function uploadFirmware() {
             let fileInput = document.getElementById('firmware');
             if (!fileInput.files.length) {
                 document.getElementById('message_box').innerText = 'Lütfen bir dosya seçin.';
@@ -1223,7 +1302,7 @@ String manualUpdatePage() {
                 document.getElementById('message_box').style.color = 'red';
                 setTimeout(() => { document.getElementById('message_box').innerText = ''; }, 5000);
             });
-        });
+        }
     </script>
 </body>
 </html>
