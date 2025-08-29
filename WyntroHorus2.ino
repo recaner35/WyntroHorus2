@@ -1,4 +1,3 @@
-```cpp
 #include <WiFi.h>
 #include <WebServer.h>
 #include <LittleFS.h> // LittleFS kütüphanesi eklendi
@@ -1429,4 +1428,3 @@ String manualUpdatePage() {
 )rawliteral";
   return page;
 }
-```
