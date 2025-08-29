@@ -1,6 +1,7 @@
+```cpp
 #include <WiFi.h>
 #include <WebServer.h>
-#include <FS.h>
+#include <LittleFS.h> // LittleFS kütüphanesi eklendi
 #include <WebSocketsServer.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -10,7 +11,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.48";
+const char* FIRMWARE_VERSION = "v1.0.47";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -82,6 +83,10 @@ String sanitizeString(String input);
 void setup() {
   Serial.begin(115200);
   EEPROM.begin(512);
+  if (!LittleFS.begin()) { // LittleFS başlatılıyor
+    Serial.println("setup: Failed to mount LittleFS!");
+    return;
+  }
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
@@ -331,6 +336,74 @@ void setupMDNS() {
 
 void setupWebServer() {
   server.on("/", HTTP_GET, []() { server.send(200, "text/html", htmlPage()); });
+  server.on("/manifest.json", HTTP_GET, []() {
+    String manifest = R"rawliteral(
+{
+  "name": "Horus by Wyntro",
+  "short_name": "Horus",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+    )rawliteral";
+    server.send(200, "application/json", manifest);
+  });
+  server.on("/sw.js", HTTP_GET, []() {
+    String sw = R"rawliteral(
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open('horus-v1').then((cache) => {
+      return cache.addAll([
+        '/',
+        '/manifest.json',
+        '/icon-192x192.png',
+        '/icon-512x512.png'
+      ]);
+    })
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
+  );
+});
+    )rawliteral";
+    server.send(200, "application/javascript", sw);
+  });
+  server.on("/icon-192x192.png", HTTP_GET, []() {
+    File file = LittleFS.open("/icon-192x192.png", "r");
+    if (!file) {
+      server.send(404, "text/plain", "Icon not found");
+      return;
+    }
+    server.streamFile(file, "image/png");
+    file.close();
+  });
+  server.on("/icon-512x512.png", HTTP_GET, []() {
+    File file = LittleFS.open("/icon-512x512.png", "r");
+    if (!file) {
+      server.send(404, "text/plain", "Icon not found");
+      return;
+    }
+    server.streamFile(file, "image/png");
+    file.close();
+  });
   server.on("/set", HTTP_GET, handleSet);
   server.on("/scan", HTTP_GET, handleScan);
   server.on("/save_wifi", HTTP_POST, handleSaveWiFi);
@@ -704,6 +777,13 @@ String htmlPage() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Horus by Wyntro</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Horus">
+    <link rel="apple-touch-icon" href="/icon-192x192.png">
+    <link rel="icon" href="/icon-192x192.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -1215,6 +1295,13 @@ String htmlPage() {
                 openTab('motor');
                 updateDeviceList();
                 initTheme();
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.register('/sw.js').then((reg) => {
+                        console.log('Service Worker registered:', reg);
+                    }).catch((error) => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+                }
             });
         }
     </script>
@@ -1232,6 +1319,13 @@ String manualUpdatePage() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Horus - Manuel Güncelleme</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Horus">
+    <link rel="apple-touch-icon" href="/icon-192x192.png">
+    <link rel="icon" href="/icon-192x192.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -1319,9 +1413,20 @@ String manualUpdatePage() {
                 setTimeout(() => { document.getElementById('message_box').innerText = ''; }, 5000);
             });
         }
+
+        window.onload = function() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').then((reg) => {
+                    console.log('Service Worker registered:', reg);
+                }).catch((error) => {
+                    console.error('Service Worker registration failed:', error);
+                });
+            }
+        }
     </script>
 </body>
 </html>
 )rawliteral";
   return page;
 }
+```
