@@ -39,13 +39,13 @@ jobs:
           arduino-cli lib install "WebSockets@2.6.1"
           arduino-cli lib install "ArduinoJson@7.4.2"
 
-      # LittleFS dosya sistemini oluştur
+# LittleFS dosya sistemini oluştur
       - name: Create LittleFS Filesystem
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip
-          pip3 install mklittlefs
-          mklittlefs -c data/ -s 1500000 filesystem.bin
+          sudo pip3 install mklfs
+          mklfs -c data/ -s 1500000 filesystem.bin
 
       - name: Firmware Sürümünü Çıkar ve Artır
         run: |
