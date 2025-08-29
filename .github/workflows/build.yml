@@ -38,7 +38,6 @@ jobs:
           echo "Kütüphaneler kuruluyor..."
           arduino-cli lib install "WebSockets@2.6.1"
           arduino-cli lib install "ArduinoJson@7.4.2"
-          arduino-cli lib install "LittleFS"
 
       # LittleFS dosya sistemini oluştur
       - name: Create LittleFS Filesystem
