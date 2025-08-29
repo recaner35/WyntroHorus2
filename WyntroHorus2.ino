@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.52";
+const char* FIRMWARE_VERSION = "v1.0.53";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -79,13 +79,17 @@ bool isNewVersionAvailable(String latest, String current);
 void checkOTAUpdateTask(void *parameter);
 String sanitizeString(String input);
 
+#include <LITTLEFS.h>
 void setup() {
   Serial.begin(115200);
-  EEPROM.begin(512);
-  if (!LittleFS.begin()) { // LittleFS başlatılıyor
-    Serial.println("setup: Failed to mount LittleFS!");
+  delay(1000);
+  Serial.println("LittleFS başlatılıyor...");
+  if (!LITTLEFS.begin(true)) {
+    Serial.println("Failed to mount LittleFS!");
     return;
   }
+  Serial.println("LittleFS mounted successfully");
+}
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
