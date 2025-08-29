@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.45";
+const char* FIRMWARE_VERSION = "v1.0.46";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -19,7 +19,6 @@ char ssid[32] = "";
 char password[64] = "";
 char custom_name[21] = "";
 char mDNS_hostname[32] = "";
-
 // Motor Settings
 int turnsPerDay = 600;
 float turnDuration = 15.0;
@@ -32,7 +31,6 @@ static int currentStepIndex = 0;
 static unsigned long lastStepTime = 0;
 static bool forward = true;
 float calculatedStepDelay = 0;
-
 // Motor Pins
 const int IN1 = 17;
 const int IN2 = 5;
@@ -44,13 +42,11 @@ const int stepsPerTurn = 4096;
 const int rampSteps = 200;
 const float minStepDelay = 2.0;
 const float maxStepDelay = 10.0;
-
 // Stepper motor step sequence (half-step)
 const int steps[8][4] = {
     {1, 0, 0, 0}, {1, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 1, 0},
     {0, 0, 1, 0}, {0, 0, 1, 1}, {0, 0, 0, 1}, {1, 0, 0, 1}
 };
-
 // Global Objects
 WebServer server(80);
 WebSocketsServer webSocket(81);
@@ -184,7 +180,6 @@ void runMotorTask(void *parameter) {
         stepMotor(currentStepIndex);
         lastStepTime = millis();
         stepCount++;
-
         if (stepCount >= stepsPerTurn) {
           stepCount = 0;
           completedTurns++;
@@ -216,7 +211,6 @@ void readSettings() {
   EEPROM.get(address, turnDuration);
   address += sizeof(turnDuration);
   EEPROM.get(address, direction);
-
   if (turnsPerDay < 600 || turnsPerDay > 1200 || isnan(turnsPerDay)) turnsPerDay = 600;
   if (turnDuration < 10.0 || turnDuration > 15.0 || isnan(turnDuration)) turnDuration = 15.0;
   if (direction < 1 || direction > 3) direction = 1;
@@ -226,7 +220,6 @@ void readSettings() {
   hourlyTurns = turnsPerDay / 24;
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
-
   Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
                 turnsPerDay, turnDuration, direction, calculatedStepDelay);
 }
@@ -511,7 +504,6 @@ void checkOTAUpdateTask(void *parameter) {
   Serial.println("checkOTAUpdateTask: Started.");
   StaticJsonDocument<256> statusDoc;
   String json;
-
   if (WiFi.status() != WL_CONNECTED) {
     statusDoc["otaStatus"] = "Hata: İnternet bağlantısı yok, lütfen WiFi ağına bağlanın.";
     serializeJson(statusDoc, json);
@@ -543,7 +535,6 @@ void checkOTAUpdateTask(void *parameter) {
   Serial.println("checkOTAUpdateTask: Fetching latest release from " + String(github_url));
   int httpCode = http.GET();
   Serial.printf("checkOTAUpdateTask: HTTP response code: %d\n", httpCode);
-
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
     StaticJsonDocument<1024> doc;
@@ -690,7 +681,7 @@ String htmlPage() {
     <title>Horus by Wyntro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // Tailwind yapılandırması: yalnızca kullanılan sınıflar
+        // Tailwind yapılandırması
         tailwind.config = {
             // DÜZELTME 1: Dark mode stratejisi açıkça belirtildi.
             darkMode: 'class',
@@ -750,9 +741,6 @@ String htmlPage() {
         #theme-system:checked + label { background-color: #4b5563; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
         #theme-dark:checked + label { background-color: #111827; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
         #theme-light:checked + label { background-color: #d97706; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
-        /* Tailwind karanlık mod için ek stiller */
-        .dark body { background-color: #111827; color: #f3f4f6; }
-        .dark .bg-white { background-color: #1f2937; }
     </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
@@ -1256,7 +1244,6 @@ String manualUpdatePage() {
 
     <script>
         let ws = new WebSocket('ws://' + window.location.hostname + ':81/');
-
         ws.onmessage = function(event) {
             console.log('WebSocket message received: ' + event.data);
             try {
