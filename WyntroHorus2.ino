@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.44";
+const char* FIRMWARE_VERSION = "v1.0.45";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -692,6 +692,8 @@ String htmlPage() {
     <script>
         // Tailwind yapılandırması: yalnızca kullanılan sınıflar
         tailwind.config = {
+            // DÜZELTME 1: Dark mode stratejisi açıkça belirtildi.
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
@@ -715,12 +717,14 @@ String htmlPage() {
                 container: false,
                 accessibility: false
             },
+            // DÜZELTME 2: Eksik dark mode sınıfları güvenli listeye eklendi.
             safelist: [
                 'bg-gray-100', 'bg-gray-800', 'bg-gray-900', 'text-gray-100', 'text-gray-900',
                 'bg-blue-500', 'hover:bg-blue-600', 'bg-red-500', 'hover:bg-red-600',
                 'bg-green-500', 'hover:bg-green-600', 'bg-purple-500', 'hover:bg-purple-600',
                 'bg-yellow-500', 'hover:bg-yellow-600', 'bg-gray-500', 'hover:bg-gray-600',
-                'dark:bg-gray-700', 'dark:border-gray-600', 'dark:text-gray-100'
+                'dark:bg-gray-900', 'dark:bg-gray-800', 'dark:bg-gray-700', 
+                'dark:border-gray-600', 'dark:text-gray-100'
             ]
         };
         // Tailwind CDN uyarısını bastır
@@ -772,7 +776,6 @@ String htmlPage() {
             <button onclick="openTab('about')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="about">Hakkında</button>
         </div>
 
-        <!-- Ayarlar Tabı -->
         <div id="motor" class="tab-content active space-y-4">
             <p class="text-center" data-translate="status">Durum: <span id="status">Durduruldu</span> <span id="motor_spinner" class="hidden animate-spin-slow">🔄</span></p>
             <p class="text-center" data-translate="completed_turns">Tamamlanan Turlar: <span id="completedTurns">0</span></p>
@@ -810,7 +813,6 @@ String htmlPage() {
             </div>
         </div>
 
-        <!-- WiFi Tabı -->
         <div id="wifi" class="tab-content space-y-4">
             <p class="text-center" id="wifi_info" data-translate="connected">Bağlı: <span id="currentSSID">-</span></p>
             <p class="text-center" id="conn_status" data-translate="connection_status">Durum: <span id="connectionStatus">-</span></p>
@@ -828,7 +830,6 @@ String htmlPage() {
             </div>
         </div>
 
-        <!-- Cihazlar Tabı -->
         <div id="devices" class="tab-content space-y-4">
             <div>
                 <label class="block text-sm font-medium" data-translate="add_device">Cihaz Ekle (örn: horus-1234.local)</label>
@@ -840,7 +841,6 @@ String htmlPage() {
             <div id="deviceList" class="space-y-2"></div>
         </div>
 
-        <!-- Hakkında Tabı -->
         <div id="about" class="tab-content space-y-4">
             <p class="text-center" data-translate="firmware_version">Firmware Sürümü: <span id="version">-</span></p>
             <p class="text-center" id="ota_status"></p>
@@ -926,7 +926,6 @@ String htmlPage() {
                 applyTheme(e.target.value);
             });
         });
-
         ws.onmessage = function(event) {
             console.log('WebSocket message received: ' + event.data);
             try {
@@ -989,7 +988,6 @@ String htmlPage() {
                 showMessage('WebSocket veri hatası.', 'error');
             }
         };
-
         function openTab(tabName) {
             const tabs = document.querySelectorAll('.tab-content');
             tabs.forEach(tab => tab.classList.remove('active'));
