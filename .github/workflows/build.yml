@@ -58,6 +58,12 @@ jobs:
           if [ -d data ]; then
             echo "data/ klasörünün içeriği:"
             ls -la data/
+            if [ -f data/icon-192x192.png ] && [ -f data/icon-512x512.png ]; then
+              echo "Gerekli dosyalar (icon-192x192.png, icon-512x512.png) bulundu."
+            else
+              echo "Hata: data/ klasöründe icon-192x192.png veya icon-512x512.png eksik!"
+              exit 1
+            fi
             mklittlefs -c data/ -s 1500000 filesystem.bin
             if [ -f filesystem.bin ]; then
               echo "filesystem.bin başarıyla oluşturuldu."
