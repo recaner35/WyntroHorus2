@@ -79,7 +79,6 @@ bool isNewVersionAvailable(String latest, String current);
 void checkOTAUpdateTask(void *parameter);
 String sanitizeString(String input);
 
-#include <LITTLEFS.h>
 void setup() {
   Serial.begin(115200);
   delay(1000);
