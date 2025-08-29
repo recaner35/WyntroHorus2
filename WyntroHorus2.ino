@@ -1,4 +1,3 @@
-```cpp
 #include <WiFi.h>
 #include <WebServer.h>
 #include <FS.h>
@@ -1231,4 +1230,3 @@ String manualUpdatePage() {
 )rawliteral";
   return page;
 }
-```
