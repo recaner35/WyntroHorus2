@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.40";
+const char* FIRMWARE_VERSION = "v1.0.42";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -97,6 +97,26 @@ void setup() {
   setupWebServer();
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
+
+  // Motor task'ını oluştur
+  BaseType_t taskCreated = xTaskCreate(
+      runMotorTask,
+      "MotorTask",
+      4096, // Yığın boyutu artırıldı
+      NULL,
+      2, // Öncelik
+      &motorTaskHandle);
+  if (taskCreated != pdPASS) {
+    Serial.println("setup: Failed to create MotorTask!");
+    StaticJsonDocument<256> doc;
+    doc["motorStatus"] = "Hata: Motor görevi oluşturulamadı.";
+    String json;
+    serializeJson(doc, json);
+    webSocket.broadcastTXT(json);
+  } else {
+    Serial.println("setup: MotorTask created successfully.");
+    vTaskSuspend(motorTaskHandle); // Başlangıçta askıya al
+  }
 }
 
 void loop() {
@@ -110,7 +130,8 @@ void stepMotor(int step) {
   digitalWrite(IN2, steps[step][1] ? HIGH : LOW);
   digitalWrite(IN3, steps[step][2] ? HIGH : LOW);
   digitalWrite(IN4, steps[step][3] ? HIGH : LOW);
-  Serial.printf("stepMotor: Step %d\n", step);
+  Serial.printf("stepMotor: Step %d, Pins: IN1=%d, IN2=%d, IN3=%d, IN4=%d\n",
+                step, steps[step][0], steps[step][1], steps[step][2], steps[step][3]);
 }
 
 void stopMotor() {
@@ -121,8 +142,11 @@ void stopMotor() {
   running = false;
   if (motorTaskHandle != NULL) {
     vTaskSuspend(motorTaskHandle);
+    Serial.println("stopMotor: Motor task suspended.");
+  } else {
+    Serial.println("stopMotor: Motor task handle is NULL!");
   }
-  Serial.println("stopMotor: Motor stopped.");
+  Serial.println("stopMotor: Motor stopped, running=false");
   StaticJsonDocument<256> doc;
   doc["motorStatus"] = "Motor durduruldu.";
   String json;
@@ -131,13 +155,20 @@ void stopMotor() {
 }
 
 void startMotor() {
+  if (motorTaskHandle == NULL) {
+    Serial.println("startMotor: Motor task handle is NULL, cannot start!");
+    StaticJsonDocument<256> doc;
+    doc["motorStatus"] = "Hata: Motor görevi başlatılamadı.";
+    String json;
+    serializeJson(doc, json);
+    webSocket.broadcastTXT(json);
+    return;
+  }
   running = true;
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
-  Serial.printf("startMotor: Starting motor, stepDelay=%.2fms\n", calculatedStepDelay);
-  if (motorTaskHandle != NULL) {
-    vTaskResume(motorTaskHandle);
-  }
+  Serial.printf("startMotor: Starting motor, stepDelay=%.2fms, free heap: %d bytes\n", calculatedStepDelay, ESP.getFreeHeap());
+  vTaskResume(motorTaskHandle);
   StaticJsonDocument<256> doc;
   doc["motorStatus"] = "Motor başlatıldı.";
   String json;
@@ -158,12 +189,13 @@ float calculateStepDelay(int stepIndex, float baseDelay) {
 
 void runMotorTask(void *parameter) {
   static int stepCount = 0;
+  Serial.println("runMotorTask: Task started.");
   for (;;) {
     if (running) {
       if (millis() - lastStepTime >= calculateStepDelay(stepCount, calculatedStepDelay)) {
         if (direction == 1 || (direction == 3 && forward)) {
           currentStepIndex = (currentStepIndex + 1) % 8;
-        } else {
+        } else if (direction == 2 || (direction == 3 && !forward)) {
           currentStepIndex = (currentStepIndex - 1 + 8) % 8;
         }
         stepMotor(currentStepIndex);
@@ -174,7 +206,8 @@ void runMotorTask(void *parameter) {
           stepCount = 0;
           completedTurns++;
           if (direction == 3) forward = !forward;
-          Serial.printf("runMotorTask: Turn completed, total turns: %d\n", completedTurns);
+          Serial.printf("runMotorTask: Turn completed, total turns: %d, direction: %d, forward: %d\n",
+                        completedTurns, direction, forward);
           StaticJsonDocument<256> doc;
           doc["motorStatus"] = "Motor çalışıyor, tur: " + String(completedTurns);
           String json;
@@ -183,6 +216,8 @@ void runMotorTask(void *parameter) {
           updateWebSocket();
         }
       }
+    } else {
+      Serial.println("runMotorTask: Motor not running, waiting...");
     }
     vTaskDelay(pdMS_TO_TICKS(1));
   }
@@ -313,7 +348,7 @@ void setupWebServer() {
     server.send(200, "text/plain", "OTA check started.");
   });
   server.on("/manual_update", HTTP_GET, []() { server.send(200, "text/html", manualUpdatePage()); });
-  server.on("/manual_update", HTTP_POST, handleManualUpdate);
+  server.on("/manual_update", HTTP_POST, []() { server.client().setTimeout(30000); }, handleManualUpdate);
   server.begin();
   Serial.println("setupWebServer: Web server started.");
 }
@@ -340,6 +375,13 @@ void handleSet() {
       stopMotor();
     } else if (action == "reset") {
       resetMotor();
+    } else {
+      Serial.println("handleSet: Invalid action: " + action);
+      StaticJsonDocument<256> doc;
+      doc["motorStatus"] = "Hata: Geçersiz komut: " + action;
+      String json;
+      serializeJson(doc, json);
+      webSocket.broadcastTXT(json);
     }
   }
   updateWebSocket();
@@ -392,39 +434,31 @@ void handleManualUpdate() {
   StaticJsonDocument<256> statusDoc;
   String json;
 
-  if (!server.hasArg("firmware")) {
-    statusDoc["otaStatus"] = "Hata: Dosya seçilmedi.";
-    serializeJson(statusDoc, json);
-    webSocket.broadcastTXT(json);
-    server.send(400, "text/plain", "No file uploaded.");
-    Serial.println("handleManualUpdate: No file uploaded.");
-    return;
-  }
-
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
-    Serial.println("handleManualUpdate: Starting firmware upload...");
+    Serial.printf("handleManualUpdate: Starting firmware upload, free heap: %d bytes\n", ESP.getFreeHeap());
     statusDoc["otaStatus"] = "Dosya yükleniyor...";
     serializeJson(statusDoc, json);
     webSocket.broadcastTXT(json);
     if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-      statusDoc["otaStatus"] = "Hata: Güncelleme başlatılamadı.";
+      statusDoc["otaStatus"] = "Hata: Güncelleme başlatılamadı, yetersiz alan.";
       serializeJson(statusDoc, json);
       webSocket.broadcastTXT(json);
-      Serial.println("handleManualUpdate: Update.begin failed.");
+      Serial.printf("handleManualUpdate: Update.begin failed, free flash: %d bytes\n", ESP.getFreeSketchSpace());
       server.send(500, "text/plain", "Update begin failed.");
       return;
     }
   } else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+    size_t written = Update.write(upload.buf, upload.currentSize);
+    if (written != upload.currentSize) {
       statusDoc["otaStatus"] = "Hata: Dosya yazma başarısız.";
       serializeJson(statusDoc, json);
       webSocket.broadcastTXT(json);
-      Serial.println("handleManualUpdate: Failed to write firmware.");
+      Serial.printf("handleManualUpdate: Failed to write firmware, written: %d, expected: %d\n", written, upload.currentSize);
       server.send(500, "text/plain", "Failed to write firmware.");
       return;
     }
-    Serial.printf("handleManualUpdate: Wrote %d bytes\n", upload.currentSize);
+    Serial.printf("handleManualUpdate: Wrote %d bytes, free heap: %d bytes\n", upload.currentSize, ESP.getFreeHeap());
   } else if (upload.status == UPLOAD_FILE_END) {
     if (Update.end(true)) {
       statusDoc["otaStatus"] = "Güncelleme başarılı! Yeniden başlatılıyor...";
@@ -441,6 +475,12 @@ void handleManualUpdate() {
       Serial.println("handleManualUpdate: Update failed to finalize.");
       server.send(500, "text/plain", "Update failed to finalize.");
     }
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    statusDoc["otaStatus"] = "Hata: Dosya yükleme iptal edildi.";
+    serializeJson(statusDoc, json);
+    webSocket.broadcastTXT(json);
+    Serial.println("handleManualUpdate: Upload aborted.");
+    server.send(500, "text/plain", "Upload aborted.");
   }
 }
 
@@ -488,17 +528,40 @@ bool isNewVersionAvailable(String latest, String current) {
 
 void checkOTAUpdateTask(void *parameter) {
   Serial.println("checkOTAUpdateTask: Started.");
-  HTTPClient http;
-  http.setTimeout(10000);
-  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS); // Yönlendirmeleri takip et
-  http.setRedirectLimit(5); // Maksimum 5 yönlendirme
-  http.begin(github_url);
-  http.addHeader("Accept", "application/vnd.github.v3+json");
-  http.addHeader("User-Agent", "ESP32-WyntroHorus2"); // GitHub için User-Agent
-  Serial.println("checkOTAUpdateTask: Fetching latest release...");
-  int httpCode = http.GET();
   StaticJsonDocument<256> statusDoc;
-  statusDoc["updateAvailable"] = false;
+  String json;
+
+  if (WiFi.status() != WL_CONNECTED) {
+    statusDoc["otaStatus"] = "Hata: İnternet bağlantısı yok, lütfen WiFi ağına bağlanın.";
+    serializeJson(statusDoc, json);
+    webSocket.broadcastTXT(json);
+    Serial.println("checkOTAUpdateTask: No WiFi connection.");
+    vTaskDelete(NULL);
+    return;
+  }
+
+  HTTPClient http;
+  http.setTimeout(15000);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setRedirectLimit(5);
+  http.addHeader("Accept", "application/vnd.github.v3+json");
+  http.addHeader("User-Agent", "ESP32-WyntroHorus2/1.0");
+
+  IPAddress githubIP;
+  if (!WiFi.hostByName("api.github.com", githubIP)) {
+    statusDoc["otaStatus"] = "Hata: DNS çözümlemesi başarısız.";
+    serializeJson(statusDoc, json);
+    webSocket.broadcastTXT(json);
+    Serial.println("checkOTAUpdateTask: DNS resolution failed for api.github.com");
+    vTaskDelete(NULL);
+    return;
+  }
+  Serial.println("checkOTAUpdateTask: DNS resolved, IP: " + githubIP.toString());
+
+  http.begin(github_url);
+  Serial.println("checkOTAUpdateTask: Fetching latest release from " + String(github_url));
+  int httpCode = http.GET();
+  Serial.printf("checkOTAUpdateTask: HTTP response code: %d\n", httpCode);
 
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
@@ -524,17 +587,17 @@ void checkOTAUpdateTask(void *parameter) {
         if (binUrl.length() > 0) {
           Serial.println("checkOTAUpdateTask: Downloading firmware from " + binUrl);
           statusDoc["otaStatus"] = "Güncelleme indiriliyor: " + latestVersion;
-          String json;
           serializeJson(statusDoc, json);
           webSocket.broadcastTXT(json);
 
           http.end();
           http.begin(binUrl);
-          http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS); // Yönlendirmeleri takip et
-          http.setRedirectLimit(5); // Maksimum 5 yönlendirme
-          http.addHeader("User-Agent", "ESP32-WyntroHorus2");
+          http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+          http.setRedirectLimit(5);
+          http.addHeader("User-Agent", "ESP32-WyntroHorus2/1.0");
           Serial.println("checkOTAUpdateTask: Initiating HTTP GET for firmware...");
           int httpCodeBin = http.GET();
+          Serial.printf("checkOTAUpdateTask: Firmware HTTP response code: %d\n", httpCodeBin);
           if (httpCodeBin == HTTP_CODE_OK) {
             size_t size = http.getSize();
             Serial.println("checkOTAUpdateTask: File size: " + String(size));
@@ -549,7 +612,7 @@ void checkOTAUpdateTask(void *parameter) {
             }
 
             if (Update.begin(size)) {
-              Serial.println("checkOTAUpdateTask: Starting OTA update, size: " + String(size));
+              Serial.printf("checkOTAUpdateTask: Starting OTA update, size: %d, free heap: %d bytes\n", size, ESP.getFreeHeap());
               WiFiClient *client = http.getStreamPtr();
               size_t written = Update.writeStream(*client);
               if (written == size) {
@@ -567,20 +630,15 @@ void checkOTAUpdateTask(void *parameter) {
                 }
               } else {
                 statusDoc["otaStatus"] = "Hata: Dosya yazma başarısız.";
-                Serial.println("checkOTAUpdateTask: Failed to write firmware, written: " + String(written));
+                Serial.printf("checkOTAUpdateTask: Failed to write firmware, written: %d, expected: %d\n", written, size);
               }
             } else {
               statusDoc["otaStatus"] = "Hata: Güncelleme başlatılamadı, yetersiz alan.";
-              Serial.println("checkOTAUpdateTask: Update.begin failed, size: " + String(size));
+              Serial.printf("checkOTAUpdateTask: Update.begin failed, size: %d, free flash: %d bytes\n", size, ESP.getFreeSketchSpace());
             }
           } else {
             statusDoc["otaStatus"] = "Hata: Dosya indirilemedi, HTTP " + String(httpCodeBin);
-            serializeJson(statusDoc, json);
-            webSocket.broadcastTXT(json);
             Serial.println("checkOTAUpdateTask: Failed to download firmware, HTTP code: " + String(httpCodeBin));
-            http.end();
-            vTaskDelete(NULL);
-            return;
           }
           http.end();
         } else {
@@ -592,15 +650,14 @@ void checkOTAUpdateTask(void *parameter) {
         Serial.println("checkOTAUpdateTask: Firmware is up to date: " + currentVersion);
       }
     } else {
-      statusDoc["otaStatus"] = "OTA kontrol hatası: JSON parse error: " + String(error.c_str());
+      statusDoc["otaStatus"] = "Hata: JSON ayrıştırma hatası: " + String(error.c_str());
       Serial.println("checkOTAUpdateTask: JSON parse error: " + String(error.c_str()));
     }
   } else {
-    statusDoc["otaStatus"] = "OTA kontrol hatası: HTTP " + String(httpCode);
+    statusDoc["otaStatus"] = "Hata: OTA kontrol başarısız, HTTP " + String(httpCode);
     Serial.println("checkOTAUpdateTask: HTTP error: " + String(httpCode));
   }
   http.end();
-  String json;
   serializeJson(statusDoc, json);
   webSocket.broadcastTXT(json);
   Serial.println("checkOTAUpdateTask: Completed.");
@@ -623,7 +680,7 @@ void updateWebSocket() {
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
-  Serial.println("updateWebSocket: Sent update.");
+  Serial.println("updateWebSocket: Sent update: " + json);
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
@@ -636,6 +693,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       updateWebSocket();
       break;
     case WStype_TEXT:
+      Serial.printf("webSocketEvent: Received text from client [%u]: %s\n", num, payload);
       break;
   }
 }
@@ -734,7 +792,7 @@ String htmlPage() {
             </div>
             <div>
                 <label class="block text-sm font-medium" data-translate="password">Şifre</label>
-                <input type="password" id="wifi_password" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
+            <input type="password" id="wifi_password" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
             </div>
             <div class="flex justify-center space-x-2">
                 <button onclick="scanWiFi()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="scan_networks">Ağları Tara</button>
@@ -867,10 +925,14 @@ String htmlPage() {
                 if (data.mDNS) mDNSElement.innerText = data.mDNS;
                 if (data.currentSSID != null) currentSSIDElement.innerText = data.currentSSID;
                 if (data.connectionStatus != null) connectionStatusElement.innerText = data.connectionStatus;
-                if (data.motorStatus) motorStatusElement.innerText = data.motorStatus;
+                if (data.motorStatus) {
+                    motorStatusElement.innerText = data.motorStatus;
+                    motorStatusElement.style.color = data.motorStatus.includes("Hata") ? 'red' : 'green';
+                }
             } catch (e) {
                 console.error("JSON parse error:", e);
                 console.log("Received data:", event.data);
+                showMessage('WebSocket veri hatası.', 'error');
             }
         };
 
@@ -901,15 +963,22 @@ String htmlPage() {
             let duration = document.getElementById('duration').value;
             let dir = document.querySelector('input[name="dir"]:checked').value;
             let url = `/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`;
+            console.log(`sendCommand: Sending ${action} to ${url}`);
             fetch(url)
-                .then(response => response.text())
+                .then(response => {
+                    console.log(`sendCommand: Response status: ${response.status}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error: ${response.status}`);
+                    }
+                    return response.text();
+                })
                 .then(data => {
-                    console.log(data);
+                    console.log(`sendCommand: Response: ${data}`);
                     showMessage(`Komut gönderildi: ${action}`);
                 })
                 .catch(error => {
-                    console.error('Hata:', error);
-                    showMessage('Komut gönderilirken hata oluştu.', 'error');
+                    console.error('sendCommand: Error:', error);
+                    showMessage(`Komut gönderilirken hata oluştu: ${action}`, 'error');
                 });
         }
 
@@ -1182,11 +1251,13 @@ String manualUpdatePage() {
             if (!file) {
                 uploadStatusElement.innerText = 'Hata: Dosya seçilmedi.';
                 uploadStatusElement.style.color = 'red';
+                console.error('uploadFirmware: No file selected.');
                 return;
             }
             if (!file.name.endsWith('.bin')) {
                 uploadStatusElement.innerText = 'Hata: Yalnızca .bin dosyaları desteklenir.';
                 uploadStatusElement.style.color = 'red';
+                console.error('uploadFirmware: Invalid file type, expected .bin');
                 return;
             }
 
@@ -1194,21 +1265,29 @@ String manualUpdatePage() {
             formData.append('firmware', file);
             uploadStatusElement.innerText = 'Dosya yükleniyor...';
             uploadStatusElement.style.color = 'black';
+            console.log('uploadFirmware: Starting file upload, file size: ' + file.size + ' bytes');
             fetch('/manual_update', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                headers: {
+                    'Accept': '*/*'
+                }
             })
             .then(response => {
+                console.log('uploadFirmware: Response status: ' + response.status);
                 if (response.ok) {
-                    console.log('Dosya yüklendi.');
+                    uploadStatusElement.innerText = 'Dosya yüklendi, işleniyor...';
+                    uploadStatusElement.style.color = 'black';
+                    console.log('uploadFirmware: File upload successful.');
                 } else {
-                    uploadStatusElement.innerText = 'Hata: Dosya yüklenemedi.';
-                    uploadStatusElement.style.color = 'red';
+                    return response.text().then(text => {
+                        throw new Error('HTTP error: ' + response.status + ', ' + text);
+                    });
                 }
             })
             .catch(error => {
-                console.error('Hata:', error);
-                uploadStatusElement.innerText = 'Hata: Yükleme sırasında bir sorun oluştu.';
+                console.error('uploadFirmware: Error:', error);
+                uploadStatusElement.innerText = 'Hata: Yükleme sırasında hata oluştu: ' + error.message;
                 uploadStatusElement.style.color = 'red';
             });
         }
