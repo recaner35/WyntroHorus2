@@ -82,7 +82,7 @@ String sanitizeString(String input);
 void setup() {
   Serial.begin(115200);
 
-  if (!LittleFS.begin(true)) {  // true => mount başarısızsa formatla
+  if (!LittleFS.begin(false)) {  // true => mount başarısızsa formatla
     Serial.println("LittleFS mount failed, even after format!");
   } else {
     Serial.println("LittleFS mounted successfully!");
