@@ -87,7 +87,7 @@ void setup() {
   } else {
     Serial.println("LittleFS mounted successfully!");
   }
-}
+
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
@@ -97,23 +97,9 @@ void setup() {
   setupWiFi();
   setupMDNS();
   setupWebServer();
-  webSocket.begin();
-  webSocket.onEvent(webSocketEvent);
 
-  // Motor task'ını oluştur
-  BaseType_t taskCreated = xTaskCreate(
-      runMotorTask,
-      "MotorTask",
-      4096,
-      NULL,
-      1,
-      &motorTaskHandle);
-  if (taskCreated != pdPASS) {
-    Serial.println("setup: Failed to create MotorTask!");
-  } else {
-    Serial.println("setup: MotorTask created successfully.");
-    vTaskSuspend(motorTaskHandle); // Başlangıçta askıya al
-  }
+  xTaskCreate(runMotorTask, "MotorTask", 4096, NULL, 1, NULL);
+  xTaskCreate(checkOTAUpdateTask, "CheckOTA", 8192, NULL, 1, NULL);
 }
 
 void loop() {
