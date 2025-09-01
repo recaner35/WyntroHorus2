@@ -81,13 +81,12 @@ String sanitizeString(String input);
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-  Serial.println("LittleFS başlatılıyor...");
-  if (!LittleFS.begin(true)) {
-    Serial.println("Failed to mount LittleFS!");
-    return;
+
+  if (!LittleFS.begin(true)) {  // true => mount başarısızsa formatla
+    Serial.println("LittleFS mount failed, even after format!");
+  } else {
+    Serial.println("LittleFS mounted successfully!");
   }
-  Serial.println("LittleFS mounted successfully");
 }
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
