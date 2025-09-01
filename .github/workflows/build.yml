@@ -23,7 +23,16 @@ jobs:
           else
             echo "Hata: WyntroHorus2.ino bulunamadı, satır sonu dönüştürmesi atlandı."
           fi
-
+      - name: Cache Arduino Core ve Libraries
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: ${{ runner.os }}-arduino-${{ hashFiles('**/WyntroHorus2.ino') }}
+          restore-keys: |
+            ${{ runner.os }}-arduino-
+            
       - name: Arduino CLI’yi Kur
         uses: arduino/setup-arduino-cli@v1
 
