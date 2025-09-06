@@ -1,16 +1,15 @@
 #include <WiFi.h>
 #include <WebServer.h>
-#include <LittleFS.h> // LittleFS kütüphanesi eklendi
+#include <LittleFS.h>
 #include <WebSocketsServer.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
-#include <EEPROM.h>
 #include <Update.h>
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.54";
+const char* FIRMWARE_VERSION = "v1.0.56";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -54,8 +53,7 @@ TaskHandle_t motorTaskHandle = NULL;
 
 // Function prototypes
 void readSettings();
-void writeMotorSettings();
-void writeWiFiSettings();
+void writeSettings();
 void setupWiFi();
 void setupMDNS();
 void setupWebServer();
@@ -81,13 +79,11 @@ String sanitizeString(String input);
 
 void setup() {
   Serial.begin(115200);
-
-  if (!LittleFS.begin()) {  // true => mount başarısızsa formatla
-    Serial.println("LittleFS mount failed, even after format!");
+  if (!LittleFS.begin(false)) {
+    Serial.println("LittleFS mount failed!");
   } else {
     Serial.println("LittleFS mounted successfully!");
   }
-
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
@@ -97,7 +93,6 @@ void setup() {
   setupWiFi();
   setupMDNS();
   setupWebServer();
-
   xTaskCreate(runMotorTask, "MotorTask", 4096, NULL, 1, NULL);
   xTaskCreate(checkOTAUpdateTask, "CheckOTA", 8192, NULL, 1, NULL);
 }
@@ -190,71 +185,67 @@ void runMotorTask(void *parameter) {
 }
 
 void readSettings() {
-  int address = 0;
-  EEPROM.readBytes(address, ssid, sizeof(ssid));
-  address += sizeof(ssid);
-  EEPROM.readBytes(address, password, sizeof(password));
-  address += sizeof(password);
-  EEPROM.readBytes(address, custom_name, sizeof(custom_name));
-  address += sizeof(custom_name);
-  EEPROM.get(address, turnsPerDay);
-  address += sizeof(turnsPerDay);
-  EEPROM.get(address, turnDuration);
-  address += sizeof(turnDuration);
-  EEPROM.get(address, direction);
-  if (turnsPerDay < 600 || turnsPerDay > 1200 || isnan(turnsPerDay)) turnsPerDay = 600;
-  if (turnDuration < 10.0 || turnDuration > 15.0 || isnan(turnDuration)) turnDuration = 15.0;
-  if (direction < 1 || direction > 3) direction = 1;
-  if (strlen(ssid) > 31) ssid[0] = '\0';
-  if (strlen(password) > 63) password[0] = '\0';
-  if (strlen(custom_name) > 20) custom_name[0] = '\0';
-  hourlyTurns = turnsPerDay / 24;
-  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
-  calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
-  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
-                turnsPerDay, turnDuration, direction, calculatedStepDelay);
+  if (!LittleFS.begin(false)) {
+    return;
+  }
+  File file = LittleFS.open("/settings.json", "r");
+  if (!file) {
+    Serial.println("Ayarlar dosyası bulunamadı, varsayılan ayarlar kullanılacak.");
+    return;
+  }
+  StaticJsonDocument<512> doc;
+  DeserializationError error = deserializeJson(doc, file);
+  if (error) {
+    Serial.print("JSON okuma hatası: ");
+    Serial.println(error.c_str());
+    file.close();
+    return;
+  }
+  strlcpy(ssid, doc["ssid"] | "", sizeof(ssid));
+  strlcpy(password, doc["password"] | "", sizeof(password));
+  strlcpy(custom_name, doc["custom_name"] | "", sizeof(custom_name));
+  turnsPerDay = doc["turnsPerDay"] | 600;
+  turnDuration = doc["turnDuration"] | 15.0;
+  direction = doc["direction"] | 1;
+  file.close();
+  Serial.println("Ayarlar dosyadan okundu.");
 }
 
-void writeMotorSettings() {
-  int address = sizeof(ssid) + sizeof(password) + sizeof(custom_name);
-  EEPROM.put(address, turnsPerDay);
-  address += sizeof(turnsPerDay);
-  EEPROM.put(address, turnDuration);
-  address += sizeof(turnDuration);
-  EEPROM.put(address, direction);
-  EEPROM.commit();
-  Serial.printf("writeMotorSettings: TPD=%d, Duration=%.2f, Direction=%d\n", turnsPerDay, turnDuration, direction);
-}
-
-void writeWiFiSettings() {
-  int address = 0;
-  EEPROM.writeBytes(address, ssid, sizeof(ssid));
-  address += sizeof(ssid);
-  EEPROM.writeBytes(address, password, sizeof(password));
-  address += sizeof(password);
-  EEPROM.writeBytes(address, custom_name, sizeof(custom_name));
-  EEPROM.commit();
-  Serial.println("writeWiFiSettings: WiFi settings saved, restarting...");
+void writeSettings() {
+  if (!LittleFS.begin(false)) {
+    Serial.println("LittleFS başlatılamadı!");
+    return;
+  }
+  File file = LittleFS.open("/settings.json", "w");
+  if (!file) {
+    Serial.println("Ayarlar dosyası yazılamadı.");
+    return;
+  }
+  StaticJsonDocument<512> doc;
+  doc["ssid"] = ssid;
+  doc["password"] = password;
+  doc["custom_name"] = custom_name;
+  doc["turnsPerDay"] = turnsPerDay;
+  doc["turnDuration"] = turnDuration;
+  doc["direction"] = direction;
+  serializeJson(doc, file);
+  file.close();
+  Serial.println("Ayarlar dosyaya kaydedildi.");
 }
 
 void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   WiFi.mode(WIFI_AP_STA);
-
-  // MAC adresinin son dört hanesini al
   byte mac[6];
   WiFi.macAddress(mac);
   char mac_suffix[5];
   sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
-  
-  // SSID adını oluştur
   char ap_ssid[32];
   if (strlen(custom_name) > 0) {
     sprintf(ap_ssid, "%s-%s", custom_name, mac_suffix);
   } else {
     sprintf(ap_ssid, "Horus-%s", mac_suffix);
   }
-  
   if (!WiFi.softAP(ap_ssid, default_password)) {
     Serial.println("setupWiFi: Failed to start AP!");
     while (true);
@@ -280,7 +271,6 @@ void setupWiFi() {
 
 String sanitizeString(String input) {
   String result = input;
-  // Türkçe karakterleri dönüştür
   result.replace("ç", "c");
   result.replace("Ç", "C");
   result.replace("ş", "s");
@@ -293,9 +283,7 @@ String sanitizeString(String input) {
   result.replace("Ü", "U");
   result.replace("ö", "o");
   result.replace("Ö", "O");
-  // Boşlukları tire ile değiştir
   result.replace(" ", "-");
-  // Diğer tüm özel karakterleri tire ile değiştir
   String sanitized = "";
   for (int i = 0; i < result.length(); i++) {
     char c = result[i];
@@ -305,11 +293,9 @@ String sanitizeString(String input) {
       sanitized += "-";
     }
   }
-  // Birden fazla tireyi tek tireye indirge
   while (sanitized.indexOf("--") != -1) {
     sanitized.replace("--", "-");
   }
-  // Başta ve sonda tire varsa kaldır
   sanitized.trim();
   while (sanitized.startsWith("-")) sanitized.remove(0, 1);
   while (sanitized.endsWith("-")) sanitized.remove(sanitized.length() - 1, 1);
@@ -317,20 +303,16 @@ String sanitizeString(String input) {
 }
 
 void setupMDNS() {
-  // MAC adresinin son dört hanesini al
   byte mac[6];
   WiFi.macAddress(mac);
   char mac_suffix[5];
   sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
-  
-  // mDNS adını oluştur
   char mdns_name[32];
   if (strlen(custom_name) > 0) {
-    sprintf(mdns_name, "%s-%s", custom_name, mac_suffix);
+    sprintf(mdns_name, "%s-%s", sanitizeString(custom_name).c_str(), mac_suffix);
   } else {
     sprintf(mdns_name, "horus-%s", mac_suffix);
   }
-  
   if (MDNS.begin(mdns_name)) {
     Serial.println("setupMDNS: Started: " + String(mdns_name) + ".local");
   } else {
@@ -426,6 +408,9 @@ self.addEventListener('fetch', (event) => {
   server.on("/manual_update", HTTP_POST, []() { server.client().setTimeout(30000); }, handleManualUpdate);
   server.begin();
   Serial.println("setupWebServer: Web server started.");
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+  Serial.println("setupWebServer: Web socket server started.");
 }
 
 void handleSet() {
@@ -440,7 +425,7 @@ void handleSet() {
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
   Serial.printf("handleSet: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
                 turnsPerDay, turnDuration, direction, calculatedStepDelay);
-  writeMotorSettings();
+  writeSettings();
   if (server.hasArg("action")) {
     String action = server.arg("action");
     Serial.println("handleSet: Action=" + action);
@@ -477,8 +462,8 @@ void handleSaveWiFi() {
   String old_name = String(custom_name);
   if (server.hasArg("ssid")) strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
   if (server.hasArg("password")) strncpy(password, server.arg("password").c_str(), sizeof(password));
-  if (server.hasArg("name")) strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name));
-  writeWiFiSettings();
+  if (server.hasArg("name")) strncpy(custom_name, sanitizeString(server.arg("name")).c_str(), sizeof(custom_name));
+  writeSettings();
   if (String(custom_name) != old_name) {
     MDNS.end();
     setupMDNS();
@@ -507,7 +492,6 @@ void handleStatus() {
 void handleManualUpdate() {
   StaticJsonDocument<256> statusDoc;
   String json;
-
   if (!server.hasArg("firmware")) {
     statusDoc["otaStatus"] = "Hata: Dosya seçilmedi.";
     serializeJson(statusDoc, json);
@@ -516,7 +500,6 @@ void handleManualUpdate() {
     Serial.println("handleManualUpdate: No file uploaded.");
     return;
   }
-
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
     Serial.println("handleManualUpdate: Starting firmware upload, free heap: " + String(ESP.getFreeHeap()) + " bytes");
@@ -573,7 +556,7 @@ void resetMotor() {
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
   Serial.printf("resetMotor: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
                 turnsPerDay, turnDuration, direction, calculatedStepDelay);
-  writeMotorSettings();
+  writeSettings();
   updateWebSocket();
 }
 
@@ -614,14 +597,12 @@ void checkOTAUpdateTask(void *parameter) {
     vTaskDelete(NULL);
     return;
   }
-
   HTTPClient http;
   http.setTimeout(15000);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   http.setRedirectLimit(5);
   http.addHeader("Accept", "application/vnd.github.v3+json");
   http.addHeader("User-Agent", "ESP32-WyntroHorus2/1.0");
-
   IPAddress githubIP;
   if (!WiFi.hostByName("api.github.com", githubIP)) {
     statusDoc["otaStatus"] = "Hata: DNS çözümlemesi başarısız.";
@@ -632,7 +613,6 @@ void checkOTAUpdateTask(void *parameter) {
     return;
   }
   Serial.println("checkOTAUpdateTask: DNS resolved, IP: " + githubIP.toString());
-
   http.begin(github_url);
   Serial.println("checkOTAUpdateTask: Fetching latest release from " + String(github_url));
   int httpCode = http.GET();
@@ -648,7 +628,6 @@ void checkOTAUpdateTask(void *parameter) {
       if (isNewVersionAvailable(latestVersion, currentVersion)) {
         statusDoc["otaStatus"] = "Yeni sürüm mevcut: " + latestVersion;
         statusDoc["updateAvailable"] = true;
-
         String binUrl;
         for (JsonVariant asset : doc["assets"].as<JsonArray>()) {
           String name = asset["name"].as<String>();
@@ -657,13 +636,11 @@ void checkOTAUpdateTask(void *parameter) {
             break;
           }
         }
-
         if (binUrl.length() > 0) {
           Serial.println("checkOTAUpdateTask: Downloading firmware from " + binUrl);
           statusDoc["otaStatus"] = "Güncelleme indiriliyor: " + latestVersion;
           serializeJson(statusDoc, json);
           webSocket.broadcastTXT(json);
-
           http.end();
           http.begin(binUrl);
           http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
@@ -684,7 +661,6 @@ void checkOTAUpdateTask(void *parameter) {
               vTaskDelete(NULL);
               return;
             }
-
             if (Update.begin(size)) {
               Serial.println("checkOTAUpdateTask: Starting OTA update, size: " + String(size));
               WiFiClient *client = http.getStreamPtr();
@@ -722,8 +698,6 @@ void checkOTAUpdateTask(void *parameter) {
           Serial.println("checkOTAUpdateTask: No .bin file found in release.");
         }
       } else {
-        statusDoc["otaStatus"] = "Firmware güncel: " + currentVersion;
-        Serial.println("checkOTAUpdateTask: Firmware is up to date: " + currentVersion);
       }
     } else {
       statusDoc["otaStatus"] = "Hata: JSON ayrıştırma hatası: " + String(error.c_str());
@@ -750,9 +724,8 @@ void updateWebSocket() {
   doc["turnDuration"] = turnDuration;
   doc["direction"] = direction;
   doc["customName"] = custom_name;
-  doc["currentSSID"] = WiFi.SSID() != "" ? WiFi.SSID() : String(mDNS_hostname);
+  doc["currentSSID"] = WiFi.SSID() != "" ? WiFi.SSID() : String(default_ssid);
   doc["connectionStatus"] = WiFi.status() == WL_CONNECTED ? "Bağlandı" : "Hotspot modunda";
-  doc["mDNS"] = String(mDNS_hostname) + ".local";
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
