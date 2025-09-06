@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.57";
+const char* FIRMWARE_VERSION = "v1.0.58";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -774,7 +774,7 @@ String htmlPage() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Horus v1.0.57</title>
+    <title>Horus v1.0.58</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icon-192x192.png">
@@ -973,7 +973,7 @@ String htmlPage() {
 </head>
 <body>
     <div class="container">
-        <h1>Wyntro Horus v1.0.57</h1>
+        <h1>Wyntro Horus v1.0.58</h1>
 
         <div class="card">
             <h2>Durum</h2>
