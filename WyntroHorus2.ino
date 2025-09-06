@@ -9,7 +9,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.56";
+const char* FIRMWARE_VERSION = "v1.0.55";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -236,15 +236,15 @@ void writeSettings() {
 void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   WiFi.mode(WIFI_AP_STA);
-  byte mac[6];
-  WiFi.macAddress(mac);
-  char mac_suffix[5];
-  sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
+  // MAC adresinin son dört hanesini almak için daha güvenilir bir yöntem
+  String mac_str = WiFi.softAPmacAddress();
+  String mac_suffix = mac_str.substring(mac_str.length() - 5);
+  mac_suffix.replace(":", "");
   char ap_ssid[32];
   if (strlen(custom_name) > 0) {
-    sprintf(ap_ssid, "%s-%s", custom_name, mac_suffix);
+    sprintf(ap_ssid, "%s-%s", custom_name, mac_suffix.c_str());
   } else {
-    sprintf(ap_ssid, "Horus-%s", mac_suffix);
+    sprintf(ap_ssid, "Horus-%s", mac_suffix.c_str());
   }
   if (!WiFi.softAP(ap_ssid, default_password)) {
     Serial.println("setupWiFi: Failed to start AP!");
@@ -303,15 +303,15 @@ String sanitizeString(String input) {
 }
 
 void setupMDNS() {
-  byte mac[6];
-  WiFi.macAddress(mac);
-  char mac_suffix[5];
-  sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
+  // MAC adresinin son dört hanesini almak için daha güvenilir bir yöntem
+  String mac_str = WiFi.softAPmacAddress();
+  String mac_suffix = mac_str.substring(mac_str.length() - 5);
+  mac_suffix.replace(":", "");
   char mdns_name[32];
   if (strlen(custom_name) > 0) {
-    sprintf(mdns_name, "%s-%s", sanitizeString(custom_name).c_str(), mac_suffix);
+    sprintf(mdns_name, "%s-%s", sanitizeString(custom_name).c_str(), mac_suffix.c_str());
   } else {
-    sprintf(mdns_name, "horus-%s", mac_suffix);
+    sprintf(mdns_name, "horus-%s", mac_suffix.c_str());
   }
   if (MDNS.begin(mdns_name)) {
     Serial.println("setupMDNS: Started: " + String(mdns_name) + ".local");
@@ -745,7 +745,6 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       break;
   }
 }
-
 String htmlPage() {
   String page = R"rawliteral(
 <!DOCTYPE html>
