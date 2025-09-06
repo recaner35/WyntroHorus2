@@ -1,15 +1,16 @@
 #include <WiFi.h>
 #include <WebServer.h>
-#include <LittleFS.h>
+#include <LittleFS.h> // LittleFS kütüphanesi eklendi
 #include <WebSocketsServer.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include <EEPROM.h>
 #include <Update.h>
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.55";
+const char* FIRMWARE_VERSION = "v1.0.57"; // Seri monitör çıktınıza göre sürümü güncelledim
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -18,6 +19,7 @@ char ssid[32] = "";
 char password[64] = "";
 char custom_name[21] = "";
 char mDNS_hostname[32] = "";
+
 // Motor Settings
 int turnsPerDay = 600;
 float turnDuration = 15.0;
@@ -30,6 +32,7 @@ static int currentStepIndex = 0;
 static unsigned long lastStepTime = 0;
 static bool forward = true;
 float calculatedStepDelay = 0;
+
 // Motor Pins
 const int IN1 = 17;
 const int IN2 = 5;
@@ -41,11 +44,13 @@ const int stepsPerTurn = 4096;
 const int rampSteps = 200;
 const float minStepDelay = 2.0;
 const float maxStepDelay = 10.0;
+
 // Stepper motor step sequence (half-step)
 const int steps[8][4] = {
     {1, 0, 0, 0}, {1, 1, 0, 0}, {0, 1, 0, 0}, {0, 1, 1, 0},
     {0, 0, 1, 0}, {0, 0, 1, 1}, {0, 0, 0, 1}, {1, 0, 0, 1}
 };
+
 // Global Objects
 WebServer server(80);
 WebSocketsServer webSocket(81);
@@ -53,7 +58,8 @@ TaskHandle_t motorTaskHandle = NULL;
 
 // Function prototypes
 void readSettings();
-void writeSettings();
+void writeMotorSettings();
+void writeWiFiSettings();
 void setupWiFi();
 void setupMDNS();
 void setupWebServer();
@@ -80,10 +86,11 @@ String sanitizeString(String input);
 void setup() {
   Serial.begin(115200);
   if (!LittleFS.begin(false)) {
-    Serial.println("LittleFS mount failed!");
+    Serial.println("LittleFS mount failed, even after format!");
   } else {
     Serial.println("LittleFS mounted successfully!");
   }
+
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
@@ -93,8 +100,10 @@ void setup() {
   setupWiFi();
   setupMDNS();
   setupWebServer();
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+
   xTaskCreate(runMotorTask, "MotorTask", 4096, NULL, 1, NULL);
-  xTaskCreate(checkOTAUpdateTask, "CheckOTA", 8192, NULL, 1, NULL);
 }
 
 void loop() {
@@ -185,72 +194,62 @@ void runMotorTask(void *parameter) {
 }
 
 void readSettings() {
-  if (!LittleFS.begin(false)) {
-    return;
-  }
-  File file = LittleFS.open("/settings.json", "r");
-  if (!file) {
-    Serial.println("Ayarlar dosyası bulunamadı, varsayılan ayarlar kullanılacak.");
-    return;
-  }
-  StaticJsonDocument<512> doc;
-  DeserializationError error = deserializeJson(doc, file);
-  if (error) {
-    Serial.print("JSON okuma hatası: ");
-    Serial.println(error.c_str());
-    file.close();
-    return;
-  }
-  strlcpy(ssid, doc["ssid"] | "", sizeof(ssid));
-  strlcpy(password, doc["password"] | "", sizeof(password));
-  strlcpy(custom_name, doc["custom_name"] | "", sizeof(custom_name));
-  turnsPerDay = doc["turnsPerDay"] | 600;
-  turnDuration = doc["turnDuration"] | 15.0;
-  direction = doc["direction"] | 1;
-  file.close();
-  Serial.println("Ayarlar dosyadan okundu.");
+  int address = 0;
+  EEPROM.readBytes(address, ssid, sizeof(ssid));
+  address += sizeof(ssid);
+  EEPROM.readBytes(address, password, sizeof(password));
+  address += sizeof(password);
+  EEPROM.readBytes(address, custom_name, sizeof(custom_name));
+  address += sizeof(custom_name);
+  EEPROM.get(address, turnsPerDay);
+  address += sizeof(turnsPerDay);
+  EEPROM.get(address, turnDuration);
+  address += sizeof(turnDuration);
+  EEPROM.get(address, direction);
+  if (turnsPerDay < 600 || turnsPerDay > 1200 || isnan(turnsPerDay)) turnsPerDay = 600;
+  if (turnDuration < 10.0 || turnDuration > 15.0 || isnan(turnDuration)) turnDuration = 15.0;
+  if (direction < 1 || direction > 3) direction = 1;
+  if (strlen(ssid) > 31) ssid[0] = '\0';
+  if (strlen(password) > 63) password[0] = '\0';
+  if (strlen(custom_name) > 20) custom_name[0] = '\0';
+  hourlyTurns = turnsPerDay / 24;
+  calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
+  calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
+  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
+                turnsPerDay, turnDuration, direction, calculatedStepDelay);
 }
 
-void writeSettings() {
-  if (!LittleFS.begin(false)) {
-    Serial.println("LittleFS başlatılamadı!");
-    return;
-  }
-  File file = LittleFS.open("/settings.json", "w");
-  if (!file) {
-    Serial.println("Ayarlar dosyası yazılamadı.");
-    return;
-  }
-  StaticJsonDocument<512> doc;
-  doc["ssid"] = ssid;
-  doc["password"] = password;
-  doc["custom_name"] = custom_name;
-  doc["turnsPerDay"] = turnsPerDay;
-  doc["turnDuration"] = turnDuration;
-  doc["direction"] = direction;
-  serializeJson(doc, file);
-  file.close();
-  Serial.println("Ayarlar dosyaya kaydedildi.");
+void writeMotorSettings() {
+  int address = sizeof(ssid) + sizeof(password) + sizeof(custom_name);
+  EEPROM.put(address, turnsPerDay);
+  address += sizeof(turnsPerDay);
+  EEPROM.put(address, turnDuration);
+  address += sizeof(turnDuration);
+  EEPROM.put(address, direction);
+  EEPROM.commit();
+  Serial.printf("writeMotorSettings: TPD=%d, Duration=%.2f, Direction=%d\n", turnsPerDay, turnDuration, direction);
+}
+
+void writeWiFiSettings() {
+  int address = 0;
+  EEPROM.writeBytes(address, ssid, sizeof(ssid));
+  address += sizeof(ssid);
+  EEPROM.writeBytes(address, password, sizeof(password));
+  address += sizeof(password);
+  EEPROM.writeBytes(address, custom_name, sizeof(custom_name));
+  EEPROM.commit();
+  Serial.println("writeWiFiSettings: WiFi settings saved, restarting...");
 }
 
 void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   WiFi.mode(WIFI_AP_STA);
-  // MAC adresinin son dört hanesini almak için daha güvenilir bir yöntem
-  String mac_str = WiFi.softAPmacAddress();
-  String mac_suffix = mac_str.substring(mac_str.length() - 5);
-  mac_suffix.replace(":", "");
-  char ap_ssid[32];
-  if (strlen(custom_name) > 0) {
-    sprintf(ap_ssid, "%s-%s", custom_name, mac_suffix.c_str());
-  } else {
-    sprintf(ap_ssid, "Horus-%s", mac_suffix.c_str());
-  }
-  if (!WiFi.softAP(ap_ssid, default_password)) {
+  setupMDNS();
+  if (!WiFi.softAP(mDNS_hostname, default_password)) {
     Serial.println("setupWiFi: Failed to start AP!");
     while (true);
   }
-  Serial.println("setupWiFi: AP started: " + String(ap_ssid) + ", IP: " + WiFi.softAPIP().toString());
+  Serial.println("setupWiFi: AP started: " + String(mDNS_hostname) + ", IP: " + WiFi.softAPIP().toString());
   if (strlen(ssid) > 0 && strlen(password) >= 8) {
     WiFi.begin(ssid, password);
     int attempts = 0;
@@ -271,6 +270,7 @@ void setupWiFi() {
 
 String sanitizeString(String input) {
   String result = input;
+  // Türkçe karakterleri dönüştür
   result.replace("ç", "c");
   result.replace("Ç", "C");
   result.replace("ş", "s");
@@ -283,7 +283,9 @@ String sanitizeString(String input) {
   result.replace("Ü", "U");
   result.replace("ö", "o");
   result.replace("Ö", "O");
+  // Boşlukları tire ile değiştir
   result.replace(" ", "-");
+  // Diğer tüm özel karakterleri tire ile değiştir
   String sanitized = "";
   for (int i = 0; i < result.length(); i++) {
     char c = result[i];
@@ -293,9 +295,11 @@ String sanitizeString(String input) {
       sanitized += "-";
     }
   }
+  // Birden fazla tireyi tek tireye indirge
   while (sanitized.indexOf("--") != -1) {
     sanitized.replace("--", "-");
   }
+  // Başta ve sonda tire varsa kaldır
   sanitized.trim();
   while (sanitized.startsWith("-")) sanitized.remove(0, 1);
   while (sanitized.endsWith("-")) sanitized.remove(sanitized.length() - 1, 1);
@@ -303,18 +307,19 @@ String sanitizeString(String input) {
 }
 
 void setupMDNS() {
-  // MAC adresinin son dört hanesini almak için daha güvenilir bir yöntem
-  String mac_str = WiFi.softAPmacAddress();
-  String mac_suffix = mac_str.substring(mac_str.length() - 5);
-  mac_suffix.replace(":", "");
-  char mdns_name[32];
-  if (strlen(custom_name) > 0) {
-    sprintf(mdns_name, "%s-%s", sanitizeString(custom_name).c_str(), mac_suffix.c_str());
+  String mac = WiFi.softAPmacAddress();
+  mac.replace(":", "");
+  String macLast4 = mac.substring(mac.length() - 4);
+  String sanitized_name = sanitizeString(String(custom_name));
+  if (sanitized_name.length() > 0 && sanitized_name.length() <= 20) {
+    strncpy(mDNS_hostname, (sanitized_name + "-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
+    mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
   } else {
-    sprintf(mdns_name, "horus-%s", mac_suffix.c_str());
+    strncpy(mDNS_hostname, ("horus-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
+    mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
   }
-  if (MDNS.begin(mdns_name)) {
-    Serial.println("setupMDNS: Started: " + String(mdns_name) + ".local");
+  if (MDNS.begin(mDNS_hostname)) {
+    Serial.println("setupMDNS: Started: " + String(mDNS_hostname) + ".local");
   } else {
     Serial.println("setupMDNS: Failed to start!");
   }
@@ -408,8 +413,6 @@ self.addEventListener('fetch', (event) => {
   server.on("/manual_update", HTTP_POST, []() { server.client().setTimeout(30000); }, handleManualUpdate);
   server.begin();
   Serial.println("setupWebServer: Web server started.");
-  webSocket.begin();
-  webSocket.onEvent(webSocketEvent);
   Serial.println("setupWebServer: Web socket server started.");
 }
 
@@ -425,7 +428,7 @@ void handleSet() {
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
   Serial.printf("handleSet: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
                 turnsPerDay, turnDuration, direction, calculatedStepDelay);
-  writeSettings();
+  writeMotorSettings();
   if (server.hasArg("action")) {
     String action = server.arg("action");
     Serial.println("handleSet: Action=" + action);
@@ -462,8 +465,8 @@ void handleSaveWiFi() {
   String old_name = String(custom_name);
   if (server.hasArg("ssid")) strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
   if (server.hasArg("password")) strncpy(password, server.arg("password").c_str(), sizeof(password));
-  if (server.hasArg("name")) strncpy(custom_name, sanitizeString(server.arg("name")).c_str(), sizeof(custom_name));
-  writeSettings();
+  if (server.hasArg("name")) strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name));
+  writeWiFiSettings();
   if (String(custom_name) != old_name) {
     MDNS.end();
     setupMDNS();
@@ -492,6 +495,7 @@ void handleStatus() {
 void handleManualUpdate() {
   StaticJsonDocument<256> statusDoc;
   String json;
+
   if (!server.hasArg("firmware")) {
     statusDoc["otaStatus"] = "Hata: Dosya seçilmedi.";
     serializeJson(statusDoc, json);
@@ -500,6 +504,7 @@ void handleManualUpdate() {
     Serial.println("handleManualUpdate: No file uploaded.");
     return;
   }
+
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
     Serial.println("handleManualUpdate: Starting firmware upload, free heap: " + String(ESP.getFreeHeap()) + " bytes");
@@ -556,7 +561,7 @@ void resetMotor() {
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
   Serial.printf("resetMotor: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
                 turnsPerDay, turnDuration, direction, calculatedStepDelay);
-  writeSettings();
+  writeMotorSettings();
   updateWebSocket();
 }
 
@@ -591,6 +596,7 @@ void checkOTAUpdateTask(void *parameter) {
   String json;
   if (WiFi.status() != WL_CONNECTED) {
     statusDoc["otaStatus"] = "Hata: İnternet bağlantısı yok, lütfen WiFi ağına bağlanın.";
+    statusDoc["updateAvailable"] = false;
     serializeJson(statusDoc, json);
     webSocket.broadcastTXT(json);
     Serial.println("checkOTAUpdateTask: No WiFi connection.");
@@ -606,6 +612,7 @@ void checkOTAUpdateTask(void *parameter) {
   IPAddress githubIP;
   if (!WiFi.hostByName("api.github.com", githubIP)) {
     statusDoc["otaStatus"] = "Hata: DNS çözümlemesi başarısız.";
+    statusDoc["updateAvailable"] = false;
     serializeJson(statusDoc, json);
     webSocket.broadcastTXT(json);
     Serial.println("checkOTAUpdateTask: DNS resolution failed for api.github.com");
@@ -654,6 +661,7 @@ void checkOTAUpdateTask(void *parameter) {
             Serial.println("checkOTAUpdateTask: File size: " + String(size));
             if (size <= 0) {
               statusDoc["otaStatus"] = "Hata: Dosya boyutu bilinmiyor.";
+              statusDoc["updateAvailable"] = false;
               serializeJson(statusDoc, json);
               webSocket.broadcastTXT(json);
               Serial.println("checkOTAUpdateTask: Unknown file size.");
@@ -669,6 +677,7 @@ void checkOTAUpdateTask(void *parameter) {
                 Serial.println("checkOTAUpdateTask: Firmware written successfully.");
                 if (Update.end(true)) {
                   statusDoc["otaStatus"] = "Güncelleme başarılı! Yeniden başlatılıyor...";
+                  statusDoc["updateAvailable"] = false;
                   serializeJson(statusDoc, json);
                   webSocket.broadcastTXT(json);
                   Serial.println("checkOTAUpdateTask: Update completed, restarting...");
@@ -676,18 +685,22 @@ void checkOTAUpdateTask(void *parameter) {
                   ESP.restart();
                 } else {
                   statusDoc["otaStatus"] = "Hata: Güncelleme tamamlanamadı.";
+                  statusDoc["updateAvailable"] = false;
                   Serial.println("checkOTAUpdateTask: Update failed to finalize.");
                 }
               } else {
                 statusDoc["otaStatus"] = "Hata: Dosya yazma başarısız.";
+                statusDoc["updateAvailable"] = false;
                 Serial.println("checkOTAUpdateTask: Failed to write firmware, written: " + String(written));
               }
             } else {
               statusDoc["otaStatus"] = "Hata: Güncelleme başlatılamadı, yetersiz alan.";
+              statusDoc["updateAvailable"] = false;
               Serial.println("checkOTAUpdateTask: Update.begin failed, size: " + String(size));
             }
           } else {
             statusDoc["otaStatus"] = "Hata: Dosya indirilemedi, HTTP " + String(httpCodeBin);
+            statusDoc["updateAvailable"] = false;
             serializeJson(statusDoc, json);
             webSocket.broadcastTXT(json);
             Serial.println("checkOTAUpdateTask: Failed to download firmware, HTTP code: " + String(httpCodeBin));
@@ -695,16 +708,22 @@ void checkOTAUpdateTask(void *parameter) {
           http.end();
         } else {
           statusDoc["otaStatus"] = "Hata: .bin dosyası bulunamadı.";
+          statusDoc["updateAvailable"] = false;
           Serial.println("checkOTAUpdateTask: No .bin file found in release.");
         }
       } else {
+        statusDoc["otaStatus"] = "En son sürüme sahipsiniz.";
+        statusDoc["updateAvailable"] = false;
+        Serial.println("checkOTAUpdateTask: No new version available.");
       }
     } else {
       statusDoc["otaStatus"] = "Hata: JSON ayrıştırma hatası: " + String(error.c_str());
+      statusDoc["updateAvailable"] = false;
       Serial.println("checkOTAUpdateTask: JSON parse error: " + String(error.c_str()));
     }
   } else {
     statusDoc["otaStatus"] = "Hata: OTA kontrol başarısız, HTTP " + String(httpCode);
+    statusDoc["updateAvailable"] = false;
     Serial.println("checkOTAUpdateTask: HTTP error: " + String(httpCode));
   }
   http.end();
@@ -714,572 +733,475 @@ void checkOTAUpdateTask(void *parameter) {
   vTaskDelete(NULL);
 }
 
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
+  if (type == WStype_CONNECTED) {
+    Serial.printf("webSocketEvent: Client [%u] connected\n", num);
+    updateWebSocket();
+  } else if (type == WStype_DISCONNECTED) {
+    Serial.printf("webSocketEvent: Client [%u] disconnected\n", num);
+  } else if (type == WStype_TEXT) {
+    String msg = String((char *)payload);
+    Serial.printf("webSocketEvent: Received message: %s\n", msg.c_str());
+    if (msg == "status_request") {
+      updateWebSocket();
+    } else if (msg == "ota_check_request") {
+      xTaskCreate(checkOTAUpdateTask, "CheckOTAUpdateTask", 8192, NULL, 1, NULL);
+    }
+  }
+}
+
 void updateWebSocket() {
-  StaticJsonDocument<256> doc;
-  doc["firmwareVersion"] = FIRMWARE_VERSION;
-  doc["status"] = running ? "Çalışıyor" : "Durduruldu";
-  doc["completedTurns"] = completedTurns;
-  doc["hourlyTurns"] = hourlyTurns;
-  doc["turnsPerDay"] = turnsPerDay;
-  doc["turnDuration"] = turnDuration;
+  StaticJsonDocument<512> doc;
+  doc["tpd"] = turnsPerDay;
+  doc["duration"] = turnDuration;
   doc["direction"] = direction;
   doc["customName"] = custom_name;
-  doc["currentSSID"] = WiFi.SSID() != "" ? WiFi.SSID() : String(default_ssid);
-  doc["connectionStatus"] = WiFi.status() == WL_CONNECTED ? "Bağlandı" : "Hotspot modunda";
+  doc["completedTurns"] = completedTurns;
+  doc["hourlyTurns"] = hourlyTurns;
+  doc["status"] = running ? "Çalışıyor" : "Durduruldu";
+  if (WiFi.status() == WL_CONNECTED) {
+    doc["ip"] = WiFi.localIP().toString();
+    doc["ap"] = false;
+  } else {
+    doc["ip"] = WiFi.softAPIP().toString();
+    doc["ap"] = true;
+  }
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
   Serial.println("updateWebSocket: Sent update.");
 }
 
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
-  switch (type) {
-    case WStype_DISCONNECTED:
-      Serial.printf("webSocketEvent: Client [%u] disconnected\n", num);
-      break;
-    case WStype_CONNECTED:
-      Serial.printf("webSocketEvent: Client [%u] connected\n", num);
-      updateWebSocket();
-      break;
-    case WStype_TEXT:
-      break;
-  }
-}
 String htmlPage() {
   String page = R"rawliteral(
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horus by Wyntro</title>
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#3b82f6">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Horus v1.0.57</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Horus">
+    <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icon-192x192.png">
-    <link rel="icon" href="/icon-192x192.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        gray: {
-                            100: '#f3f4f6', 600: '#4b5563', 700: '#374151',
-                            800: '#1f2937', 900: '#111827'
-                        },
-                        blue: { 500: '#3b82f6', 600: '#2563eb' },
-                        red: { 500: '#ef4444', 600: '#dc2626' },
-                        green: { 500: '#22c55e', 600: '#16a34a' },
-                        purple: { 500: '#8b5cf6', 600: '#7c3aed' },
-                        yellow: { 500: '#eab308', 600: '#ca8a04' }
-                    }
-                }
-            },
-            corePlugins: {
-                preflight: true, container: false, accessibility: false
-            },
-            safelist: [
-                'bg-gray-100', 'bg-gray-800', 'bg-gray-900', 'text-gray-100', 'text-gray-900',
-                'bg-blue-500', 'hover:bg-blue-600', 'bg-red-500', 'hover:bg-red-600',
-                'bg-green-500', 'hover:bg-green-600', 'bg-purple-500', 'hover:bg-purple-600',
-                'bg-yellow-500', 'hover:bg-yellow-600', 'bg-gray-500', 'hover:bg-gray-600',
-                'dark:bg-gray-900', 'dark:bg-gray-800', 'dark:bg-gray-700', 
-                'dark:border-gray-600', 'dark:text-gray-100'
-            ]
-        };
-        console.warn = function() {};
-    </script>
     <style>
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .animate-spin-slow { animation: spin 2s linear infinite; }
-        .hidden { display: none; }
-        .tab-content.active { display: block; }
-        .tab-content { display: none; }
-        .theme-toggle { display: flex; align-items: center; gap: 8px; }
-        .theme-toggle input { display: none; }
-        .theme-toggle label { 
-            display: inline-flex; align-items: center; justify-content: center;
-            width: 40px; height: 40px; cursor: pointer; 
-            border-radius: 50%; transition: background-color 0.3s, box-shadow 0.3s;
+        :root {
+            --bg-color: #111827;
+            --text-color: #f9fafb;
+            --primary-color: #3b82f6;
+            --secondary-color: #d1d5db;
+            --card-bg: #1f2937;
+            --border-color: #4b5563;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+        }
+
+        h1, h2 {
+            color: var(--primary-color);
+            text-align: center;
+        }
+
+        .status-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: space-between;
+        }
+
+        .status-item {
+            flex: 1 1 calc(50% - 10px);
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .status-item span {
+            display: block;
+            font-size: 14px;
+            color: var(--secondary-color);
+        }
+
+        .status-item h3 {
+            margin: 5px 0 0;
             font-size: 20px;
+            color: var(--text-color);
+            font-weight: bold;
         }
-        #theme-system + label { background-color: #6b7280; }
-        #theme-dark + label { background-color: #1f2937; }
-        #theme-light + label { background-color: #f59e0b; }
-        #theme-system:checked + label { background-color: #4b5563; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
-        #theme-dark:checked + label { background-color: #111827; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
-        #theme-light:checked + label { background-color: #d97706; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
-        body.dark { 
-            background-color: #111827;
-            color: #f3f4f6;
+
+        .form-group {
+            margin-bottom: 15px;
         }
-        .dark .bg-white { 
-            background-color: #1f2937;
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--secondary-color);
+        }
+
+        .form-group input[type="number"],
+        .form-group select,
+        .form-group input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            background-color: #374151;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-color);
+            box-sizing: border-box;
+        }
+
+        .form-group input[type="number"]:focus,
+        .form-group select:focus,
+        .form-group input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .button {
+            flex: 1 1 calc(33.333% - 10px);
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            color: white;
+            text-align: center;
+        }
+        
+        .button:active {
+            transform: scale(0.98);
+        }
+        
+        .primary {
+            background-color: var(--primary-color);
+        }
+        
+        .primary:hover {
+            background-color: #2563eb;
+        }
+        
+        .secondary {
+            background-color: #6b7280;
+        }
+        
+        .secondary:hover {
+            background-color: #4b5563;
+        }
+
+        .warning {
+            background-color: #dc2626;
+        }
+
+        .warning:hover {
+            background-color: #b91c1c;
+        }
+
+        .info-box {
+            background-color: #374151;
+            border: 1px solid #4b5563;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            font-size: 14px;
+            color: var(--secondary-color);
+            line-height: 1.5;
+        }
+
+        .message-box {
+            min-height: 20px;
+            margin-top: 10px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .wifi-list {
+            list-style: none;
+            padding: 0;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-top: 10px;
+            background-color: #374151;
+        }
+
+        .wifi-list li {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .wifi-list li:last-child {
+            border-bottom: none;
+        }
+
+        .wifi-list li:hover {
+            background-color: #4b5563;
         }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
-    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-lg">
-        <div class="flex justify-between items-center mb-4">
-            <h1 class="text-2xl font-bold text-center">Horus by Wyntro</h1>
-            <div class="theme-toggle">
-                <input type="radio" id="theme-system" name="theme" value="system">
-                <label for="theme-system">🌓</label>
-                <input type="radio" id="theme-dark" name="theme" value="dark">
-                <label for="theme-dark">🌙</label>
-                <input type="radio" id="theme-light" name="theme" value="light">
-                <label for="theme-light">☀️</label>
-            </div>
-        </div>
+<body>
+    <div class="container">
+        <h1>Wyntro Horus v1.0.57</h1>
 
-        <div class="flex justify-center mb-4 space-x-2 flex-wrap">
-            <button onclick="openTab('motor')" class="tab-button bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="settings">Ayarlar</button>
-            <button onclick="openTab('wifi')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="wifi">WiFi</button>
-            <button onclick="openTab('devices')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="devices">Cihazlar</button>
-            <button onclick="openTab('about')" class="tab-button bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="about">Hakkında</button>
-        </div>
-
-        <div id="motor" class="tab-content active space-y-4">
-            <p class="text-center" data-translate="status">Durum: <span id="status">Durduruldu</span> <span id="motor_spinner" class="hidden animate-spin-slow">🔄</span></p>
-            <p class="text-center" data-translate="completed_turns">Tamamlanan Turlar: <span id="completedTurns">0</span></p>
-            <p class="text-center" data-translate="hourly_turns">Saatlik Turlar: <span id="hourlyTurns">0</span></p>
-            <p id="motor_status" class="text-center"></p>
-            <div>
-                <label class="block text-sm font-medium" data-translate="turns_per_day">Günlük Tur Sayısı: <span id="tpd_val">600</span></label>
-                <input type="range" id="tpd" min="600" max="1200" value="600" oninput="tpd_val.innerText=this.value" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
-            </div>
-            <div>
-                <label class="block text-sm font-medium" data-translate="turn_duration">Tur Süresi (s): <span id="duration_val">15.0</span></label>
-                <input type="range" id="duration" min="10" max="15" step="0.1" value="15.0" oninput="duration_val.innerText=this.value" class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg cursor-pointer">
-            </div>
-            <div>
-                <label class="block text-sm font-medium" data-translate="direction">Dönüş Yönü</label>
-                <div class="flex justify-between space-x-2">
-                    <label class="flex items-center">
-                        <input type="radio" name="dir" value="1" checked class="mr-2">
-                        <span data-translate="clockwise">Saat Yönü</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="dir" value="2" class="mr-2">
-                        <span data-translate="counter_clockwise">Saat Yönü Ters</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="dir" value="3" class="mr-2">
-                        <span data-translate="both">Çift Yönlü</span>
-                    </label>
+        <div class="card">
+            <h2>Durum</h2>
+            <div class="status-section">
+                <div class="status-item">
+                    <span>Motor Durumu</span>
+                    <h3 id="motor_status">Yükleniyor...</h3>
+                </div>
+                <div class="status-item">
+                    <span>Tamamlanan Turlar</span>
+                    <h3 id="completed_turns">0</h3>
+                </div>
+                <div class="status-item">
+                    <span>Günlük Tur Sayısı</span>
+                    <h3 id="turns_per_day">0</h3>
+                </div>
+                <div class="status-item">
+                    <span>Tur Süresi</span>
+                    <h3 id="turn_duration">0</h3>
+                </div>
+                <div class="status-item">
+                    <span>Dönüş Yönü</span>
+                    <h3 id="direction">0</h3>
+                </div>
+                <div class="status-item">
+                    <span>Saatlik Tur Sayısı</span>
+                    <h3 id="hourly_turns">0</h3>
                 </div>
             </div>
-            <div class="flex justify-center space-x-2">
-                <button onclick="sendCommand('start')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="start">Başlat</button>
-                <button onclick="sendCommand('stop')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="stop">Durdur</button>
-                <button onclick="sendCommand('reset')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="reset_settings">Ayarları Sıfırla</button>
+            <div class="info-box">
+                <p><strong>Cihaz Adı:</strong> <span id="custom_name"></span></p>
+                <p><strong>IP Adresi:</strong> <span id="ip_address"></span></p>
+                <p><strong>AP Modu:</strong> <span id="ap_mode"></span></p>
             </div>
         </div>
 
-        <div id="wifi" class="tab-content space-y-4">
-            <p class="text-center" id="wifi_info" data-translate="connected">Bağlı: <span id="currentSSID">-</span></p>
-            <p class="text-center" id="conn_status" data-translate="connection_status">Durum: <span id="connectionStatus">-</span></p>
-            <div>
-                <label class="block text-sm font-medium" data-translate="network_name">Ağ Adı</label>
-                <select id="ssid" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100"></select>
+        <div class="card">
+            <h2>Motor Ayarları</h2>
+            <div class="form-group">
+                <label for="turns_per_day_input">Günlük Tur Sayısı (600 - 1200)</label>
+                <input type="number" id="turns_per_day_input" min="600" max="1200">
             </div>
-            <div>
-                <label class="block text-sm font-medium" data-translate="password">Şifre</label>
-                <input type="password" id="wifi_password" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
+            <div class="form-group">
+                <label for="turn_duration_input">Tur Süresi (saniye, 10 - 15)</label>
+                <input type="number" id="turn_duration_input" step="0.5" min="10" max="15">
             </div>
-            <div class="flex justify-center space-x-2">
-                <button id="scanButton" onclick="scanWiFi()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="scan_networks">Ağları Tara</button>
-                <button onclick="saveWiFi()" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="save_restart">Kaydet & Yeniden Başlat</button>
+            <div class="form-group">
+                <label for="direction_input">Dönüş Yönü</label>
+                <select id="direction_input">
+                    <option value="1">1 (İleri)</option>
+                    <option value="2">2 (Geri)</option>
+                    <option value="3">3 (İleri-Geri)</option>
+                </select>
             </div>
-        </div>
-
-        <div id="devices" class="tab-content space-y-4">
-            <div>
-                <label class="block text-sm font-medium" data-translate="add_device">Cihaz Ekle (örn: horus-1234.local)</label>
-                <input type="text" id="deviceDomain" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100" placeholder="horus-1234.local">
-            </div>
-            <div class="flex justify-center">
-                <button onclick="addDevice()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="add">Ekle</button>
-            </div>
-            <div id="deviceList" class="space-y-2"></div>
-        </div>
-
-        <div id="about" class="tab-content space-y-4">
-            <p class="text-center" data-translate="firmware_version">Firmware Sürümü: <span id="version">-</span></p>
-            <p class="text-center" id="ota_status"></p>
-            <p class="text-center" data-translate="device_name">Cihaz Adı: <span id="deviceName">-</span></p>
-            <p class="text-center" data-translate="mdns_domain">mDNS Domain: <span id="mDNS">-</span></p>
-            <div>
-                <label class="block text-sm font-medium" data-translate="device_name">Cihaz Adı</label>
-                <input type="text" id="customName" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
-            </div>
-            <div class="flex justify-center space-x-2">
-                <button onclick="saveDeviceName()" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="save">Kaydet</button>
-                <button onclick="resetDeviceName()" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="reset_device_name">Cihaz Adını Sıfırla</button>
-            </div>
-            <div class="flex flex-col items-center space-y-2">
-                <button id="checkUpdateButton" onclick="checkUpdate()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200" data-translate="check_updates">Güncellemeleri Kontrol Et</button>
+            <div class="button-group">
+                <button onclick="setMotorSettings('start')" class="button primary">Başlat</button>
+                <button onclick="setMotorSettings('stop')" class="button secondary">Durdur</button>
+                <button onclick="setMotorSettings('reset')" class="button secondary">Sıfırla</button>
+                <button onclick="setMotorSettings()" class="button primary" style="flex: 1 1 100%;">Ayarları Kaydet</button>
             </div>
         </div>
 
-        <p id="motor_status" class="text-center mt-4 text-sm font-semibold"></p>
-        <p id="message_box" class="text-center mt-4 text-sm font-semibold"></p>
+        <div class="card">
+            <h2>WiFi Ayarları</h2>
+            <div class="form-group">
+                <label for="custom_name_input">Cihaz Adı</label>
+                <input type="text" id="custom_name_input" maxlength="20">
+            </div>
+            <div class="form-group">
+                <label for="ssid_input">WiFi Ağı</label>
+                <input type="text" id="ssid_input" placeholder="Ağ adını girin veya listeden seçin">
+                <ul id="wifi-list" class="wifi-list"></ul>
+            </div>
+            <div class="form-group">
+                <label for="password_input">Şifre</label>
+                <input type="password" id="password_input" placeholder="Şifre">
+            </div>
+            <div class="button-group">
+                <button onclick="scanNetworks()" class="button secondary">Ağları Tara</button>
+                <button onclick="saveWiFiSettings()" class="button primary">Kaydet ve Yeniden Başlat</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>OTA Güncelleme</h2>
+            <div class="message-box" id="ota_message_box"></div>
+            <div class="button-group">
+                <button onclick="checkOTAUpdate()" class="button primary">Güncelleme Kontrol Et</button>
+                <a href="/manual_update" class="button secondary" style="text-decoration: none;">Manuel Güncelleme</a>
+            </div>
+        </div>
+
     </div>
 
     <script>
-        function waitForTailwind(callback) {
-            if (typeof tailwind !== 'undefined') {
-                console.log('waitForTailwind: Tailwind loaded');
-                callback();
-            } else {
-                console.log('waitForTailwind: Waiting for Tailwind...');
-                setTimeout(() => waitForTailwind(callback), 100);
+        let ws;
+        const wsUrl = `ws://${window.location.hostname}:81/ws`;
+        
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                return;
             }
+            console.log("WebSocket'e bağlanılıyor...");
+            ws = new WebSocket(wsUrl);
+            ws.onopen = () => {
+                console.log("WebSocket bağlantısı açıldı.");
+                requestStatusUpdate();
+            };
+            ws.onmessage = (event) => {
+                console.log("Mesaj alındı:", event.data);
+                handleMessage(event.data);
+            };
+            ws.onclose = () => {
+                console.log("WebSocket bağlantısı kapandı. Yeniden bağlanılıyor...");
+                setTimeout(connectWebSocket, 5000);
+            };
+            ws.onerror = (error) => {
+                console.error("WebSocket hatası:", error);
+            };
         }
 
-        let ws = new WebSocket('ws://' + window.location.hostname + ':81/');
-        let devices = JSON.parse(localStorage.getItem('horusDevices')) || [];
-
-        function applyTheme(theme) {
-            console.log('applyTheme: Applying theme:', theme);
-            const body = document.body;
-            localStorage.setItem('theme', theme);
-            const themeInput = document.querySelector(`input[name="theme"][value="${theme}"]`);
-            if (themeInput) {
-                themeInput.checked = true;
-            } else {
-                console.error('applyTheme: Theme input not found for', theme);
-            }
-            if (theme === 'system') {
-                console.log('applyTheme: System theme, checking prefers-color-scheme');
-                if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                    body.classList.add('dark');
-                    console.log('applyTheme: System prefers dark');
-                } else {
-                    body.classList.remove('dark');
-                    console.log('applyTheme: System prefers light');
-                }
-            } else if (theme === 'dark') {
-                body.classList.add('dark');
-                console.log('applyTheme: Dark theme applied');
-            } else {
-                body.classList.remove('dark');
-                console.log('applyTheme: Light theme applied');
-            }
-        }
-
-        function initTheme() {
-            console.log('initTheme: Starting theme initialization');
-            const savedTheme = localStorage.getItem('theme') || 'system';
-            console.log('initTheme: Initializing with theme:', savedTheme);
-            applyTheme(savedTheme);
-            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-            mediaQuery.addEventListener('change', (e) => {
-                console.log('initTheme: Media query changed, prefers dark:', e.matches);
-                if (localStorage.getItem('theme') === 'system') {
-                    applyTheme('system');
-                }
-            });
-        }
-
-        document.querySelectorAll('input[name="theme"]').forEach(input => {
-            input.addEventListener('change', (e) => {
-                console.log('Theme input changed to:', e.target.value);
-                applyTheme(e.target.value);
-            });
-        });
-
-        ws.onmessage = function(event) {
-            console.log('WebSocket message received: ' + event.data);
+        function handleMessage(data) {
+            let messageBox = document.getElementById('ota_message_box');
             try {
-                let data = JSON.parse(event.data);
-                const statusElement = document.getElementById('status');
-                const motorSpinnerElement = document.getElementById('motor_spinner');
-                const completedTurnsElement = document.getElementById('completedTurns');
-                const hourlyTurnsElement = document.getElementById('hourlyTurns');
-                const tpdElement = document.getElementById('tpd');
-                const tpdValElement = document.getElementById('tpd_val');
-                const durationElement = document.getElementById('duration');
-                const durationValElement = document.getElementById('duration_val');
-                const versionElement = document.getElementById('version');
-                const otaStatusElement = document.getElementById('ota_status');
-                const deviceNameElement = document.getElementById('deviceName');
-                const mDNSElement = document.getElementById('mDNS');
-                const currentSSIDElement = document.getElementById('currentSSID');
-                const connectionStatusElement = document.getElementById('connectionStatus');
-                const motorStatusElement = document.getElementById('motor_status');
-                const customNameElement = document.getElementById('customName');
-
-                if (data.status) {
-                    statusElement.innerText = data.status;
-                    motorSpinnerElement.classList.toggle('hidden', data.status !== 'Çalışıyor');
+                const doc = JSON.parse(data);
+                
+                if (doc.otaStatus) {
+                    messageBox.innerText = doc.otaStatus;
+                    messageBox.style.color = doc.otaStatus.includes("Hata") ? 'red' : 'green';
                 }
-                if (data.completedTurns != null) completedTurnsElement.innerText = data.completedTurns;
-                if (data.hourlyTurns != null) hourlyTurnsElement.innerText = data.hourlyTurns;
-                if (data.turnsPerDay != null) {
-                    tpdElement.value = data.turnsPerDay;
-                    tpdValElement.innerText = data.turnsPerDay;
+                
+                if (doc.status) {
+                    document.getElementById('motor_status').innerText = doc.status;
+                    document.getElementById('completed_turns').innerText = doc.completedTurns;
+                    document.getElementById('turns_per_day').innerText = doc.turnsPerDay;
+                    document.getElementById('turn_duration').innerText = doc.turnDuration;
+                    document.getElementById('direction').innerText = doc.direction;
+                    document.getElementById('hourly_turns').innerText = doc.hourlyTurns;
+                    document.getElementById('custom_name').innerText = doc.customName;
+                    document.getElementById('ip_address').innerText = doc.ip;
+                    document.getElementById('ap_mode').innerText = doc.ap ? 'Evet' : 'Hayır';
+                    
+                    document.getElementById('turns_per_day_input').value = doc.turnsPerDay;
+                    document.getElementById('turn_duration_input').value = doc.turnDuration;
+                    document.getElementById('direction_input').value = doc.direction;
+                    document.getElementById('custom_name_input').value = doc.customName;
                 }
-                if (data.turnDuration != null) {
-                    durationElement.value = data.turnDuration;
-                    durationValElement.innerText = data.turnDuration;
-                }
-                if (data.direction != null) {
-                    document.querySelector(`input[name="dir"][value="${data.direction}"]`).checked = true;
-                }
-                if (data.firmwareVersion) versionElement.innerText = data.firmwareVersion;
-                if (data.otaStatus) {
-                    otaStatusElement.innerText = data.otaStatus;
-                    otaStatusElement.style.color = data.otaStatus.includes("güncel") ? 'green' :
-                                                  data.otaStatus.includes("Yeni sürüm") ? 'orange' :
-                                                  data.otaStatus.includes("başarılı") ? 'green' : 'red';
-                    if (data.otaStatus.includes("başarılı") || data.otaStatus.includes("güncel") || data.otaStatus.includes("Hata")) {
-                        document.getElementById('checkUpdateButton').innerText = 'Güncellemeleri Kontrol Et';
-                        document.getElementById('checkUpdateButton').disabled = false;
-                    }
-                }
-                if (data.customName != null) {
-                    deviceNameElement.innerText = data.customName;
-                    customNameElement.value = data.customName;
-                }
-                if (data.mDNS) mDNSElement.innerText = data.mDNS;
-                if (data.currentSSID != null) currentSSIDElement.innerText = data.currentSSID;
-                if (data.connectionStatus != null) connectionStatusElement.innerText = data.connectionStatus;
             } catch (e) {
-                console.error("JSON parse error:", e);
-                console.log("Received data:", event.data);
-                showMessage('WebSocket veri hatası.', 'error');
+                console.error("JSON ayrıştırma hatası:", e);
+                messageBox.innerText = "WebSocket veri hatası.";
+                messageBox.style.color = 'red';
+            }
+        }
+        
+        function requestStatusUpdate() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send("status_request");
+            }
+        }
+
+        function setMotorSettings(action = '') {
+            let tpd = document.getElementById('turns_per_day_input').value;
+            let duration = document.getElementById('turn_duration_input').value;
+            let direction = document.getElementById('direction_input').value;
+            let url = `/set?tpd=${tpd}&duration=${duration}&dir=${direction}`;
+            if (action) {
+                url += `&action=${action}`;
+            }
+            fetch(url)
+            .then(response => response.text())
+            .then(data => console.log(data))
+            .catch(error => console.error('Hata:', error));
+        }
+
+        function saveWiFiSettings() {
+            let ssid = document.getElementById('ssid_input').value;
+            let password = document.getElementById('password_input').value;
+            let name = document.getElementById('custom_name_input').value;
+            let formData = new FormData();
+            formData.append('ssid', ssid);
+            formData.append('password', password);
+            formData.append('name', name);
+            fetch('/save_wifi', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => console.log(data))
+            .catch(error => console.error('Hata:', error));
+        }
+
+        function scanNetworks() {
+            fetch('/scan')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('wifi-list').innerHTML = data;
+                let listItems = document.querySelectorAll('#wifi-list li');
+                listItems.forEach(item => {
+                    item.addEventListener('click', () => {
+                        document.getElementById('ssid_input').value = item.textContent;
+                    });
+                });
+            })
+            .catch(error => console.error('Ağları tararken hata:', error));
+        }
+
+        function checkOTAUpdate() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send("ota_check_request");
+            }
+        }
+        
+        window.onload = function() {
+            connectWebSocket();
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').then((reg) => {
+                    console.log('Service Worker registered:', reg);
+                }).catch((error) => {
+                    console.error('Service Worker registration failed:', error);
+                });
             }
         };
 
-        function openTab(tabName) {
-            const tabs = document.querySelectorAll('.tab-content');
-            tabs.forEach(tab => tab.classList.remove('active'));
-            document.getElementById(tabName).classList.add('active');
-            const buttons = document.querySelectorAll('.tab-button');
-            buttons.forEach(btn => btn.classList.remove('bg-blue-500', 'hover:bg-blue-600'));
-            buttons.forEach(btn => btn.classList.add('bg-gray-500', 'hover:bg-gray-600'));
-            const activeTabButton = document.querySelector(`[onclick="openTab('${tabName}')"]`);
-            if (activeTabButton) {
-                activeTabButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
-                activeTabButton.classList.add('bg-blue-500', 'hover:bg-blue-600');
-            }
-            if (tabName === 'devices') updateDeviceList();
-        }
-
-        function showMessage(msg, type = 'info') {
-            const messageBox = document.getElementById('message_box');
-            messageBox.innerText = msg;
-            messageBox.style.color = type === 'error' ? 'red' : 'green';
-            setTimeout(() => { messageBox.innerText = ''; }, 5000);
-        }
-
-        function sendCommand(action) {
-            let tpd = document.getElementById('tpd').value;
-            let duration = document.getElementById('duration').value;
-            let dir = document.querySelector('input[name="dir"]:checked').value;
-            let url = `/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`;
-            console.log(`sendCommand: Sending ${action} to ${url}`);
-            fetch(url)
-                .then(response => {
-                    console.log(`sendCommand: Response status: ${response.status}`);
-                    return response.text();
-                })
-                .then(data => {
-                    console.log(`sendCommand: Response: ${data}`);
-                })
-                .catch(error => {
-                    console.error('sendCommand: Error:', error);
-                    showMessage('Komut gönderilirken hata oluştu.', 'error');
-                });
-        }
-
-        function scanWiFi() {
-            const scanButton = document.getElementById('scanButton');
-            scanButton.innerText = 'Taranıyor...';
-            scanButton.disabled = true;
-            fetch('/scan')
-                .then(response => response.text())
-                .then(data => {
-                    document.getElementById('ssid').innerHTML = data;
-                    console.log('WiFi seçenekleri yüklendi.');
-                    scanButton.innerText = 'Yeniden Tara';
-                    scanButton.disabled = false;
-                })
-                .catch(error => {
-                    console.error('Hata:', error);
-                    scanButton.innerText = 'Yeniden Tara';
-                    scanButton.disabled = false;
-                    showMessage('WiFi tarama hatası.', 'error');
-                });
-        }
-
-        function saveWiFi() {
-            let ssid = document.getElementById('ssid').value;
-            let password = document.getElementById('wifi_password').value;
-            fetch('/save_wifi', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `ssid=${encodeURIComponent(ssid)}&password=${encodeURIComponent(password)}`
-            })
-            .then(response => response.text())
-            .then(data => {
-                console.log(data);
-                showMessage('WiFi ayarları kaydedildi! Cihaz yeniden başlatılıyor.', 'info');
-            })
-            .catch(error => {
-                console.error('Hata:', error);
-                showMessage('WiFi ayarları kaydedilirken hata oluştu.', 'error');
-            });
-        }
-
-        function saveDeviceName() {
-            let name = document.getElementById('customName').value;
-            fetch('/save_wifi', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `name=${encodeURIComponent(name)}`
-            })
-            .then(response => response.text())
-            .then(data => {
-                console.log(data);
-                showMessage('Cihaz adı kaydedildi! Cihaz yeniden başlatılıyor.', 'info');
-            })
-            .catch(error => {
-                console.error('Hata:', error);
-                showMessage('Cihaz adı kaydedilirken hata oluştu.', 'error');
-            });
-        }
-
-        function resetDeviceName() {
-            fetch('/save_wifi', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `name=`
-            })
-            .then(response => response.text())
-            .then(data => {
-                console.log(data);
-                showMessage('Cihaz adı sıfırlandı! Cihaz yeniden başlatılıyor.', 'info');
-            })
-            .catch(error => {
-                console.error('Hata:', error);
-                showMessage('Cihaz adı sıfırlanırken hata oluştu.', 'error');
-            });
-        }
-
-        function addDevice() {
-            let domain = document.getElementById('deviceDomain').value.trim();
-            if (!domain.match(/^[a-zA-Z0-9-]+\.[a-z]{2,}$/)) {
-                showMessage('Geçersiz domain formatı! Örn: horus-1234.local', 'error');
-                return;
-            }
-            if (!devices.includes(domain)) {
-                devices.push(domain);
-                localStorage.setItem('horusDevices', JSON.stringify(devices));
-                showMessage(`Cihaz eklendi: ${domain}`);
-                updateDeviceList();
-            } else {
-                showMessage('Bu cihaz zaten ekli!', 'error');
-            }
-            document.getElementById('deviceDomain').value = '';
-        }
-
-        function updateDeviceList() {
-            const deviceList = document.getElementById('deviceList');
-            deviceList.innerHTML = '';
-            devices.forEach((domain, index) => {
-                fetch(`http://${domain}/status`)
-                    .then(response => response.json())
-                    .then(data => {
-                        const deviceDiv = document.createElement('div');
-                        deviceDiv.className = 'border p-2 rounded dark:border-gray-600';
-                        deviceDiv.innerHTML = `
-                            <p><strong>${domain}</strong>: ${data.status} (Turlar: ${data.completedTurns}, Günlük: ${data.turnsPerDay}, Süre: ${data.turnDuration}s, Yön: ${data.direction == 1 ? 'Saat Yönü' : data.direction == 2 ? 'Saat Yönü Ters' : 'Çift Yönlü'})</p>
-                            <div class="flex justify-between space-x-2 mt-2">
-                                <button onclick="controlDevice('${domain}', 'start')" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-2 rounded text-sm" data-translate="start">Başlat</button>
-                                <button onclick="controlDevice('${domain}', 'stop')" class="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-sm" data-translate="stop">Durdur</button>
-                                <button onclick="controlDevice('${domain}', 'reset')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-1 px-2 rounded text-sm" data-translate="reset_settings">Sıfırla</button>
-                                <button onclick="removeDevice(${index})" class="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm" data-translate="remove">Kaldır</button>
-                            </div>
-                        `;
-                        deviceList.appendChild(deviceDiv);
-                    })
-                    .catch(error => {
-                        console.error(`Hata (${domain}):`, error);
-                        const deviceDiv = document.createElement('div');
-                        deviceDiv.className = 'border p-2 rounded dark:border-gray-600';
-                        deviceDiv.innerHTML = `
-                            <p><strong>${domain}</strong>: Bağlantı hatası</p>
-                            <div class="flex justify-end mt-2">
-                                <button onclick="removeDevice(${index})" class="bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm" data-translate="remove">Kaldır</button>
-                            </div>
-                        `;
-                        deviceList.appendChild(deviceDiv);
-                    });
-            });
-        }
-
-        function controlDevice(domain, action) {
-            let tpd = document.getElementById('tpd').value;
-            let duration = document.getElementById('duration').value;
-            let dir = document.querySelector('input[name="dir"]:checked').value;
-            fetch(`http://${domain}/set?tpd=${tpd}&duration=${duration}&dir=${dir}&action=${action}`)
-                .then(response => response.text())
-                .then(data => {
-                    console.log(data);
-                    updateDeviceList();
-                })
-                .catch(error => {
-                    console.error('Hata:', error);
-                    showMessage(`Komut gönderilirken hata oluştu (${domain}).`, 'error');
-                });
-        }
-
-        function removeDevice(index) {
-            devices.splice(index, 1);
-            localStorage.setItem('horusDevices', JSON.stringify(devices));
-            showMessage('Cihaz kaldırıldı.');
-            updateDeviceList();
-        }
-
-        function checkUpdate() {
-            const updateButton = document.getElementById('checkUpdateButton');
-            updateButton.innerText = 'Kontrol Ediliyor...';
-            updateButton.disabled = true;
-            fetch('/check_update')
-                .then(response => response.text())
-                .then(data => {
-                    console.log(data);
-                })
-                .catch(error => {
-                    console.error('Hata:', error);
-                    updateButton.innerText = 'Güncellemeleri Kontrol Et';
-                    updateButton.disabled = false;
-                    showMessage('Güncelleme kontrolü başlatılamadı.', 'error');
-                });
-        }
-
-        window.onload = function() {
-            console.log('window.onload: Initializing');
-            waitForTailwind(() => {
-                console.log('window.onload: Tailwind ready, initializing tabs and theme');
-                openTab('motor');
-                updateDeviceList();
-                initTheme();
-                if ('serviceWorker' in navigator) {
-                    navigator.serviceWorker.register('/sw.js').then((reg) => {
-                        console.log('Service Worker registered:', reg);
-                    }).catch((error) => {
-                        console.error('Service Worker registration failed:', error);
-                    });
-                }
-            });
-        }
     </script>
 </body>
 </html>
@@ -1294,76 +1216,154 @@ String manualUpdatePage() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Horus - Manuel Güncelleme</title>
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#3b82f6">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Horus">
-    <link rel="apple-touch-icon" href="/icon-192x192.png">
-    <link rel="icon" href="/icon-192x192.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        gray: { 100: '#f3f4f6', 700: '#374151', 800: '#1f2937', 900: '#111827' },
-                        blue: { 500: '#3b82f6', 600: '#2563eb' },
-                        red: { 500: '#ef4444', 600: '#dc2626' }
-                    }
-                }
-            },
-            corePlugins: { preflight: true, container: false, accessibility: false },
-            safelist: ['bg-gray-100', 'bg-gray-800', 'bg-gray-900', 'text-gray-100', 'text-gray-900',
-                       'bg-blue-500', 'hover:bg-blue-600', 'bg-red-500', 'hover:bg-red-600',
-                       'dark:bg-gray-700', 'dark:border-gray-600', 'dark:text-gray-100']
-        };
-        console.warn = function() {};
-    </script>
+    <title>Manuel Güncelleme</title>
     <style>
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .animate-spin-slow { animation: spin 2s linear infinite; }
-        .hidden { display: none; }
-        body.dark { background-color: #111827; color: #f3f4f6; }
-        .dark .bg-white { background-color: #1f2937; }
+        :root {
+            --bg-color: #111827;
+            --text-color: #f9fafb;
+            --primary-color: #3b82f6;
+            --secondary-color: #d1d5db;
+            --card-bg: #1f2937;
+            --border-color: #4b5563;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+        }
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--secondary-color);
+        }
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            background-color: #374151;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-color);
+            box-sizing: border-box;
+        }
+        .button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            color: white;
+            text-align: center;
+            background-color: var(--primary-color);
+        }
+        .button:hover {
+            background-color: #2563eb;
+        }
+        .button:active {
+            transform: scale(0.98);
+        }
+        .message-box {
+            min-height: 20px;
+            margin-top: 20px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .back-link {
+            display: block;
+            margin-top: 20px;
+            text-align: center;
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: bold;
+        }
     </style>
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col items-center justify-center p-4">
-    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-lg">
-        <h1 class="text-2xl font-bold text-center mb-4">Horus - Manuel Güncelleme</h1>
-        <div class="mb-4">
-            <label class="block text-sm font-medium mb-2" for="firmware">Firmware Dosyası (.bin)</label>
-            <input type="file" id="firmware" name="firmware" accept=".bin" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 text-gray-900 dark:text-gray-100">
+<body>
+    <div class="container">
+        <h1>Manuel Güncelleme</h1>
+        <div class="card">
+            <p>Yeni firmware (.bin) dosyasını seçin ve yükle butonuna basın.</p>
+            <div class="form-group">
+                <label for="file_input">Firmware Dosyası Seçin</label>
+                <input type="file" id="file_input" accept=".bin">
+            </div>
+            <button class="button" onclick="uploadFirmware()">Yükle</button>
+            <div class="message-box" id="message_box"></div>
         </div>
-        <div class="flex justify-center">
-            <button onclick="uploadFirmware()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition-colors duration-200">Yükle</button>
-        </div>
-        <p id="ota_status" class="text-center mt-4 text-sm font-semibold"></p>
-        <p id="message_box" class="text-center mt-4 text-sm font-semibold"></p>
+        <a href="/" class="back-link">Ana Sayfaya Dön</a>
     </div>
 
     <script>
-        let ws = new WebSocket('ws://' + window.location.hostname + ':81/');
-        ws.onmessage = function(event) {
-            console.log('WebSocket message received: ' + event.data);
+        let ws;
+        const wsUrl = `ws://${window.location.hostname}:81/ws`;
+        
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                return;
+            }
+            console.log("WebSocket'e bağlanılıyor...");
+            ws = new WebSocket(wsUrl);
+            ws.onopen = () => {
+                console.log("WebSocket bağlantısı açıldı.");
+            };
+            ws.onmessage = (event) => {
+                console.log("Mesaj alındı:", event.data);
+                handleMessage(event.data);
+            };
+            ws.onclose = () => {
+                console.log("WebSocket bağlantısı kapandı. Yeniden bağlanılıyor...");
+                setTimeout(connectWebSocket, 5000);
+            };
+            ws.onerror = (error) => {
+                console.error("WebSocket hatası:", error);
+            };
+        }
+
+        function handleMessage(data) {
+            let messageBox = document.getElementById('message_box');
             try {
-                let data = JSON.parse(event.data);
-                if (data.otaStatus) {
-                    document.getElementById('ota_status').innerText = data.otaStatus;
-                    document.getElementById('ota_status').style.color = data.otaStatus.includes("başarılı") ? 'green' : 'red';
+                const doc = JSON.parse(data);
+                if (doc.otaStatus) {
+                    messageBox.innerText = doc.otaStatus;
+                    messageBox.style.color = doc.otaStatus.includes("Hata") ? 'red' : 'green';
                 }
             } catch (e) {
-                console.error("JSON parse error:", e);
-                document.getElementById('message_box').innerText = 'WebSocket veri hatası.';
-                document.getElementById('message_box').style.color = 'red';
-                setTimeout(() => { document.getElementById('message_box').innerText = ''; }, 5000);
+                console.error("JSON ayrıştırma hatası:", e);
+                messageBox.innerText = "WebSocket veri hatası.";
+                messageBox.style.color = 'red';
             }
-        };
+        }
 
         function uploadFirmware() {
-            let fileInput = document.getElementById('firmware');
-            if (!fileInput.files.length) {
+            let fileInput = document.getElementById('file_input');
+            if (fileInput.files.length === 0) {
                 document.getElementById('message_box').innerText = 'Lütfen bir dosya seçin.';
                 document.getElementById('message_box').style.color = 'red';
                 setTimeout(() => { document.getElementById('message_box').innerText = ''; }, 5000);
@@ -1391,6 +1391,7 @@ String manualUpdatePage() {
         }
 
         window.onload = function() {
+            connectWebSocket();
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/sw.js').then((reg) => {
                     console.log('Service Worker registered:', reg);
@@ -1398,7 +1399,7 @@ String manualUpdatePage() {
                     console.error('Service Worker registration failed:', error);
                 });
             }
-        }
+        };
     </script>
 </body>
 </html>
