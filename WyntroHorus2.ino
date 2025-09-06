@@ -858,9 +858,7 @@ String htmlPage() {
             color: var(--secondary-color);
         }
 
-        .form-group input[type="number"],
-        .form-group select,
-        .form-group input[type="text"] {
+        .form-group input[type="number"], .form-group select, .form-group input[type="text"] {
             width: 100%;
             padding: 10px;
             background-color: #374151;
@@ -870,9 +868,7 @@ String htmlPage() {
             box-sizing: border-box;
         }
 
-        .form-group input[type="number"]:focus,
-        .form-group select:focus,
-        .form-group input[type="text"]:focus {
+        .form-group input[type="number"]:focus, .form-group select:focus, .form-group input[type="text"]:focus {
             outline: none;
             border-color: var(--primary-color);
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
@@ -884,320 +880,305 @@ String htmlPage() {
             gap: 10px;
             margin-top: 20px;
         }
-        
+
         .button {
-            flex: 1 1 calc(33.333% - 10px);
-            padding: 12px;
-            border: none;
+            flex: 1 1 auto;
+            padding: 12px 16px;
             border-radius: 6px;
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
-            transition: background-color 0.3s ease, transform 0.1s ease;
-            color: white;
+            transition: background-color 0.3s ease;
             text-align: center;
+            border: none;
+            color: var(--text-color);
         }
-        
-        .button:active {
-            transform: scale(0.98);
-        }
-        
-        .primary {
+
+        .button.primary {
             background-color: var(--primary-color);
         }
-        
-        .primary:hover {
+
+        .button.primary:hover {
             background-color: #2563eb;
         }
-        
-        .secondary {
+
+        .button.secondary {
+            background-color: #4b5563;
+        }
+
+        .button.secondary:hover {
             background-color: #6b7280;
         }
         
-        .secondary:hover {
-            background-color: #4b5563;
-        }
-
-        .warning {
-            background-color: #dc2626;
-        }
-
-        .warning:hover {
-            background-color: #b91c1c;
-        }
-
-        .info-box {
+        #message_box {
+            margin-top: 15px;
+            padding: 10px;
             background-color: #374151;
             border: 1px solid #4b5563;
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 15px;
-            font-size: 14px;
-            color: var(--secondary-color);
-            line-height: 1.5;
-        }
-
-        .message-box {
-            min-height: 20px;
-            margin-top: 10px;
-            text-align: center;
-            font-weight: bold;
-        }
-
-        .wifi-list {
-            list-style: none;
-            padding: 0;
-            max-height: 200px;
-            overflow-y: auto;
-            border: 1px solid var(--border-color);
             border-radius: 6px;
-            margin-top: 10px;
-            background-color: #374151;
-        }
-
-        .wifi-list li {
-            padding: 10px;
-            border-bottom: 1px solid var(--border-color);
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-
-        .wifi-list li:last-child {
-            border-bottom: none;
-        }
-
-        .wifi-list li:hover {
-            background-color: #4b5563;
+            color: #f9fafb;
+            text-align: center;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Wyntro Horus v1.0.58</h1>
 
-        <div class="card">
-            <h2>Durum</h2>
-            <div class="status-section">
-                <div class="status-item">
-                    <span>Motor Durumu</span>
-                    <h3 id="motor_status">Yükleniyor...</h3>
-                </div>
-                <div class="status-item">
-                    <span>Tamamlanan Turlar</span>
-                    <h3 id="completed_turns">0</h3>
-                </div>
-                <div class="status-item">
-                    <span>Günlük Tur Sayısı</span>
-                    <h3 id="turns_per_day">0</h3>
-                </div>
-                <div class="status-item">
-                    <span>Tur Süresi</span>
-                    <h3 id="turn_duration">0</h3>
-                </div>
-                <div class="status-item">
-                    <span>Dönüş Yönü</span>
-                    <h3 id="direction">0</h3>
-                </div>
-                <div class="status-item">
-                    <span>Saatlik Tur Sayısı</span>
-                    <h3 id="hourly_turns">0</h3>
-                </div>
+<div class="container">
+    <div class="card">
+        <h1>Horus v1.0.58</h1>
+        <div class="status-section">
+            <div class="status-item">
+                <span>Motor Durumu</span>
+                <h3 id="motorStatus">Durduruldu</h3>
             </div>
-            <div class="info-box">
-                <p><strong>Cihaz Adı:</strong> <span id="custom_name"></span></p>
-                <p><strong>IP Adresi:</strong> <span id="ip_address"></span></p>
-                <p><strong>AP Modu:</strong> <span id="ap_mode"></span></p>
+            <div class="status-item">
+                <span>Tamamlanan Turlar</span>
+                <h3 id="completedTurns">0</h3>
+            </div>
+            <div class="status-item">
+                <span>Günde Dönüş</span>
+                <h3 id="turnsPerDay">600</h3>
+            </div>
+            <div class="status-item">
+                <span>Dönüş Süresi</span>
+                <h3 id="turnDuration">15 s</h3>
+            </div>
+            <div class="status-item">
+                <span>Yön</span>
+                <h3 id="direction"></h3>
+            </div>
+            <div class="status-item">
+                <span>IP Adresi</span>
+                <h3 id="ipAddress"></h3>
             </div>
         </div>
-
-        <div class="card">
-            <h2>Motor Ayarları</h2>
-            <div class="form-group">
-                <label for="turns_per_day_input">Günlük Tur Sayısı (600 - 1200)</label>
-                <input type="number" id="turns_per_day_input" min="600" max="1200">
-            </div>
-            <div class="form-group">
-                <label for="turn_duration_input">Tur Süresi (saniye, 10 - 15)</label>
-                <input type="number" id="turn_duration_input" step="0.5" min="10" max="15">
-            </div>
-            <div class="form-group">
-                <label for="direction_input">Dönüş Yönü</label>
-                <select id="direction_input">
-                    <option value="1">1 (İleri)</option>
-                    <option value="2">2 (Geri)</option>
-                    <option value="3">3 (İleri-Geri)</option>
-                </select>
-            </div>
-            <div class="button-group">
-                <button onclick="setMotorSettings('start')" class="button primary">Başlat</button>
-                <button onclick="setMotorSettings('stop')" class="button secondary">Durdur</button>
-                <button onclick="setMotorSettings('reset')" class="button secondary">Sıfırla</button>
-                <button onclick="setMotorSettings()" class="button primary" style="flex: 1 1 100%;">Ayarları Kaydet</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>WiFi Ayarları</h2>
-            <div class="form-group">
-                <label for="custom_name_input">Cihaz Adı</label>
-                <input type="text" id="custom_name_input" maxlength="20">
-            </div>
-            <div class="form-group">
-                <label for="ssid_input">WiFi Ağı</label>
-                <input type="text" id="ssid_input" placeholder="Ağ adını girin veya listeden seçin">
-                <ul id="wifi-list" class="wifi-list"></ul>
-            </div>
-            <div class="form-group">
-                <label for="password_input">Şifre</label>
-                <input type="password" id="password_input" placeholder="Şifre">
-            </div>
-            <div class="button-group">
-                <button onclick="scanNetworks()" class="button secondary">Ağları Tara</button>
-                <button onclick="saveWiFiSettings()" class="button primary">Kaydet ve Yeniden Başlat</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>OTA Güncelleme</h2>
-            <div class="message-box" id="ota_message_box"></div>
-            <div class="button-group">
-                <button onclick="checkOTAUpdate()" class="button primary">Güncelleme Kontrol Et</button>
-                <a href="/manual_update" class="button secondary" style="text-decoration: none;">Manuel Güncelleme</a>
-            </div>
-        </div>
-
     </div>
 
-    <script>
-        let ws;
-        const wsUrl = `ws://${window.location.hostname}:81/ws`;
-        
-        function connectWebSocket() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                return;
-            }
-            console.log("WebSocket'e bağlanılıyor...");
-            ws = new WebSocket(wsUrl);
-            ws.onopen = () => {
-                console.log("WebSocket bağlantısı açıldı.");
-                requestStatusUpdate();
-            };
-            ws.onmessage = (event) => {
-                console.log("Mesaj alındı:", event.data);
-                handleMessage(event.data);
-            };
-            ws.onclose = () => {
-                console.log("WebSocket bağlantısı kapandı. Yeniden bağlanılıyor...");
-                setTimeout(connectWebSocket, 5000);
-            };
-            ws.onerror = (error) => {
-                console.error("WebSocket hatası:", error);
-            };
+    <div class="card">
+        <h2>Ayarlar</h2>
+        <div class="form-group">
+            <label for="turnsPerDay">Günde Dönüş Sayısı</label>
+            <input type="range" id="turnsPerDayInput" min="600" max="1200" step="100" value="600" oninput="document.getElementById('turnsPerDayValue').innerText = this.value;">
+            <p style="text-align: center; margin: 5px 0 0;"><span id="turnsPerDayValue">600</span> Tur</p>
+        </div>
+        <div class="form-group">
+            <label for="turnDuration">Dönüş Süresi (saniye)</label>
+            <input type="range" id="turnDurationInput" min="10" max="15" step="0.5" value="15" oninput="document.getElementById('turnDurationValue').innerText = this.value;">
+            <p style="text-align: center; margin: 5px 0 0;"><span id="turnDurationValue">15.0</span> s</p>
+        </div>
+        <div class="form-group">
+            <label for="direction">Yön</label>
+            <select id="directionInput">
+                <option value="1">Sadece İleri</option>
+                <option value="2">Sadece Geri</option>
+                <option value="3">İleri ve Geri</option>
+            </select>
+        </div>
+        <div class="button-group">
+            <button class="button primary" onclick="sendSettings('start')">Başlat</button>
+            <button class="button secondary" onclick="sendSettings('stop')">Durdur</button>
+            <button class="button secondary" onclick="sendSettings('reset')">Sıfırla</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>WiFi Ayarları</h2>
+        <div class="form-group">
+            <label for="ssid">Ağ Adı (SSID)</label>
+            <select id="ssidSelect"></select>
+        </div>
+        <div class="form-group">
+            <label for="password">Şifre</label>
+            <input type="text" id="passwordInput" placeholder="Şifrenizi buraya girin">
+        </div>
+        <div class="form-group">
+            <label for="name">Cihaz Adı (Opsiyonel)</label>
+            <input type="text" id="nameInput" placeholder="Cihaz Adı">
+        </div>
+        <div class="button-group">
+            <button class="button primary" onclick="saveWiFiSettings()">Kaydet ve Yeniden Başlat</button>
+            <button class="button secondary" onclick="scanNetworks()">Ağları Tara</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Cihaz Güncelleme</h2>
+        <div class="button-group">
+            <button class="button primary" onclick="checkOTAUpdate()">Güncelleme Kontrol Et</button>
+            <button class="button secondary" onclick="window.location.href='/manual_update'">Manuel Güncelleme</button>
+        </div>
+        <p id="message_box" style="display:none; text-align: center;"></p>
+    </div>
+</div>
+
+<script>
+    var ws;
+    var reconnectInterval;
+
+    function connectWebSocket() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            return;
         }
 
-        function handleMessage(data) {
-            let messageBox = document.getElementById('ota_message_box');
-            try {
-                const doc = JSON.parse(data);
-                
-                if (doc.otaStatus) {
-                    messageBox.innerText = doc.otaStatus;
-                    messageBox.style.color = doc.otaStatus.includes("Hata") ? 'red' : 'green';
-                }
-                
-                if (doc.status) {
-                    document.getElementById('motor_status').innerText = doc.status;
-                    document.getElementById('completed_turns').innerText = doc.completedTurns;
-                    document.getElementById('turns_per_day').innerText = doc.turnsPerDay;
-                    document.getElementById('turn_duration').innerText = doc.turnDuration;
-                    document.getElementById('direction').innerText = doc.direction;
-                    document.getElementById('hourly_turns').innerText = doc.hourlyTurns;
-                    document.getElementById('custom_name').innerText = doc.customName;
-                    document.getElementById('ip_address').innerText = doc.ip;
-                    document.getElementById('ap_mode').innerText = doc.ap ? 'Evet' : 'Hayır';
-                    
-                    document.getElementById('turns_per_day_input').value = doc.turnsPerDay;
-                    document.getElementById('turn_duration_input').value = doc.turnDuration;
-                    document.getElementById('direction_input').value = doc.direction;
-                    document.getElementById('custom_name_input').value = doc.customName;
-                }
-            } catch (e) {
-                console.error("JSON ayrıştırma hatası:", e);
-                messageBox.innerText = "WebSocket veri hatası.";
-                messageBox.style.color = 'red';
-            }
-        }
-        
-        function requestStatusUpdate() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send("status_request");
-            }
-        }
+        ws = new WebSocket('ws://' + window.location.hostname + ':81/');
 
-        function setMotorSettings(action = '') {
-            let tpd = document.getElementById('turns_per_day_input').value;
-            let duration = document.getElementById('turn_duration_input').value;
-            let direction = document.getElementById('direction_input').value;
-            let url = `/set?tpd=${tpd}&duration=${duration}&dir=${direction}`;
-            if (action) {
-                url += `&action=${action}`;
-            }
-            fetch(url)
-            .then(response => response.text())
-            .then(data => console.log(data))
-            .catch(error => console.error('Hata:', error));
-        }
+        ws.onopen = function() {
+            console.log('WebSocket bağlantısı açıldı.');
+            clearInterval(reconnectInterval);
+            ws.send('status_request');
+        };
 
-        function saveWiFiSettings() {
-            let ssid = document.getElementById('ssid_input').value;
-            let password = document.getElementById('password_input').value;
-            let name = document.getElementById('custom_name_input').value;
-            let formData = new FormData();
-            formData.append('ssid', ssid);
-            formData.append('password', password);
-            formData.append('name', name);
-            fetch('/save_wifi', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.text())
-            .then(data => console.log(data))
-            .catch(error => console.error('Hata:', error));
-        }
+        ws.onmessage = function(event) {
+            console.log('Gelen mesaj:', event.data);
+            handleMessage(event.data);
+        };
 
-        function scanNetworks() {
-            fetch('/scan')
-            .then(response => response.text())
-            .then(data => {
-                document.getElementById('wifi-list').innerHTML = data;
-                let listItems = document.querySelectorAll('#wifi-list li');
-                listItems.forEach(item => {
-                    item.addEventListener('click', () => {
-                        document.getElementById('ssid_input').value = item.textContent;
-                    });
-                });
-            })
-            .catch(error => console.error('Ağları tararken hata:', error));
-        }
-
-        function checkOTAUpdate() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send("ota_check_request");
-            }
-        }
-        
-        window.onload = function() {
-            connectWebSocket();
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js').then((reg) => {
-                    console.log('Service Worker registered:', reg);
-                }).catch((error) => {
-                    console.error('Service Worker registration failed:', error);
-                });
+        ws.onclose = function() {
+            console.log('WebSocket bağlantısı kesildi, yeniden bağlanılıyor...');
+            if (!reconnectInterval) {
+                reconnectInterval = setInterval(connectWebSocket, 5000);
             }
         };
 
-    </script>
+        ws.onerror = function(error) {
+            console.error('WebSocket hatası:', error);
+            ws.close();
+        };
+    }
+
+    function handleMessage(data) {
+        try {
+            var doc = JSON.parse(data);
+            if (doc.tpd) document.getElementById('turnsPerDayValue').innerText = doc.tpd;
+            if (doc.duration) document.getElementById('turnDurationValue').innerText = doc.duration;
+            if (doc.tpd) document.getElementById('turnsPerDayInput').value = doc.tpd;
+            if (doc.duration) document.getElementById('turnDurationInput').value = doc.duration;
+            if (doc.direction) document.getElementById('directionInput').value = doc.direction;
+            if (doc.customName) document.getElementById('nameInput').value = doc.customName;
+            if (doc.motorStatus) document.getElementById('motorStatus').innerText = doc.motorStatus;
+            if (doc.completedTurns) document.getElementById('completedTurns').innerText = doc.completedTurns;
+            if (doc.status) document.getElementById('motorStatus').innerText = doc.status;
+            if (doc.hourlyTurns) document.getElementById('hourlyTurns').innerText = doc.hourlyTurns;
+            if (doc.ip) document.getElementById('ipAddress').innerText = doc.ip;
+
+            if (doc.otaStatus) {
+                const msgBox = document.getElementById('message_box');
+                msgBox.innerText = doc.otaStatus;
+                msgBox.style.color = (doc.otaStatus.includes('Hata') || doc.otaStatus.includes('başarısız')) ? 'red' : 'green';
+                msgBox.style.display = 'block';
+                if (!doc.otaStatus.includes("indiriliyor")) {
+                    setTimeout(() => { msgBox.style.display = 'none'; }, 5000);
+                }
+            }
+
+            if (doc.updateAvailable !== undefined) {
+                const checkButton = document.getElementById('otaCheckButton');
+                if (doc.updateAvailable) {
+                    checkButton.innerText = "Yeni Sürüm Mevcut!";
+                    checkButton.style.backgroundColor = 'green';
+                    checkButton.onclick = () => { window.location.href='/manual_update'; };
+                } else {
+                    checkButton.innerText = "Güncelleme Kontrol Et";
+                    checkButton.style.backgroundColor = '';
+                    checkButton.onclick = () => { checkOTAUpdate(); };
+                }
+            }
+
+        } catch(e) {
+            console.error("JSON ayrıştırma hatası:", e);
+        }
+    }
+
+    function sendSettings(action) {
+        const turnsPerDay = document.getElementById('turnsPerDayInput').value;
+        const turnDuration = document.getElementById('turnDurationInput').value;
+        const direction = document.getElementById('directionInput').value;
+
+        let url = `/set?tpd=${turnsPerDay}&duration=${turnDuration}&dir=${direction}`;
+        if (action) {
+            url += `&action=${action}`;
+        }
+        
+        fetch(url)
+            .then(response => response.text())
+            .then(data => {
+                console.log(data);
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send('status_request');
+                }
+            })
+            .catch(error => console.error('Hata:', error));
+    }
+
+    function requestStatusUpdate() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send('status_request');
+        }
+    }
+
+    function saveWiFiSettings() {
+        const ssid = document.getElementById('ssidSelect').value;
+        const password = document.getElementById('passwordInput').value;
+        const name = document.getElementById('nameInput').value;
+        fetch('/save_wifi', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `ssid=${encodeURIComponent(ssid)}&password=${encodeURIComponent(password)}&name=${encodeURIComponent(name)}`
+        })
+        .then(response => response.text())
+        .then(data => {
+            console.log(data);
+        })
+        .catch(error => console.error('Hata:', error));
+    }
+
+    function scanNetworks() {
+        const scanButton = document.querySelector('.card:nth-of-type(3) .button.secondary');
+        const originalText = scanButton.innerText;
+        scanButton.innerText = "Taranıyor...";
+        scanButton.disabled = true;
+
+        fetch('/scan')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('ssidSelect').innerHTML = data;
+                scanButton.innerText = originalText;
+                scanButton.disabled = false;
+            })
+            .catch(error => {
+                console.error('Hata:', error);
+                scanButton.innerText = originalText;
+                scanButton.disabled = false;
+            });
+    }
+
+    function checkOTAUpdate() {
+        const msgBox = document.getElementById('message_box');
+        msgBox.innerText = "Güncelleme kontrol ediliyor...";
+        msgBox.style.color = 'yellow';
+        msgBox.style.display = 'block';
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send('ota_check_request');
+        } else {
+            msgBox.innerText = "Hata: Sunucuya bağlanılamadı.";
+            msgBox.style.color = 'red';
+            setTimeout(() => { msgBox.style.display = 'none'; }, 5000);
+        }
+    }
+
+    window.onload = function() {
+        connectWebSocket();
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').then((reg) => {
+                console.log('Service Worker registered:', reg);
+            }).catch((error) => {
+                console.error('Service Worker registration failed:', error);
+            });
+        }
+    };
+</script>
 </body>
 </html>
 )rawliteral";
@@ -1213,155 +1194,105 @@ String manualUpdatePage() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manuel Güncelleme</title>
     <style>
-        :root {
-            --bg-color: #111827;
-            --text-color: #f9fafb;
-            --primary-color: #3b82f6;
-            --secondary-color: #d1d5db;
-            --card-bg: #1f2937;
-            --border-color: #4b5563;
-        }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
         }
         .container {
-            width: 100%;
-            max-width: 600px;
-        }
-        .card {
-            background-color: var(--card-bg);
-            border-radius: 12px;
+            max-width: 500px;
+            margin: auto;
             padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-            border: 1px solid var(--border-color);
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        h1 {
-            color: var(--primary-color);
-            text-align: center;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: var(--secondary-color);
-        }
-        .form-group input[type="file"] {
-            width: 100%;
+        #message_box {
+            margin-top: 20px;
             padding: 10px;
-            background-color: #374151;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-color);
-            box-sizing: border-box;
+            border: 1px solid transparent;
+            border-radius: 5px;
         }
-        .button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: bold;
+        .success {
+            color: green;
+            border-color: green;
+        }
+        .error {
+            color: red;
+            border-color: red;
+        }
+        input[type="file"] {
+            margin-top: 10px;
+        }
+        button {
+            margin-top: 10px;
+            padding: 10px 20px;
             cursor: pointer;
-            transition: background-color 0.3s ease, transform 0.1s ease;
-            color: white;
-            text-align: center;
-            background-color: var(--primary-color);
-        }
-        .button:hover {
-            background-color: #2563eb;
-        }
-        .button:active {
-            transform: scale(0.98);
-        }
-        .message-box {
-            min-height: 20px;
-            margin-top: 20px;
-            text-align: center;
-            font-weight: bold;
-        }
-        .back-link {
-            display: block;
-            margin-top: 20px;
-            text-align: center;
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Manuel Güncelleme</h1>
-        <div class="card">
-            <p>Yeni firmware (.bin) dosyasını seçin ve yükle butonuna basın.</p>
-            <div class="form-group">
-                <label for="file_input">Firmware Dosyası Seçin</label>
-                <input type="file" id="file_input" accept=".bin">
-            </div>
-            <button class="button" onclick="uploadFirmware()">Yükle</button>
-            <div class="message-box" id="message_box"></div>
-        </div>
-        <a href="/" class="back-link">Ana Sayfaya Dön</a>
+        <p>Firmware dosyasını (.bin) seçin ve yükle'ye basın.</p>
+        <input type="file" id="firmwareFile" accept=".bin">
+        <br>
+        <button onclick="uploadFirmware()">Yükle</button>
+        <div id="message_box"></div>
     </div>
 
     <script>
-        let ws;
-        const wsUrl = `ws://${window.location.hostname}:81/ws`;
+        var ws;
+        var reconnectInterval;
         
         function connectWebSocket() {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 return;
             }
-            console.log("WebSocket'e bağlanılıyor...");
-            ws = new WebSocket(wsUrl);
-            ws.onopen = () => {
-                console.log("WebSocket bağlantısı açıldı.");
+
+            ws = new WebSocket('ws://' + window.location.hostname + ':81/');
+
+            ws.onopen = function() {
+                console.log('WebSocket bağlantısı açıldı.');
+                clearInterval(reconnectInterval);
             };
-            ws.onmessage = (event) => {
-                console.log("Mesaj alındı:", event.data);
+
+            ws.onmessage = function(event) {
+                console.log('Gelen mesaj:', event.data);
                 handleMessage(event.data);
             };
-            ws.onclose = () => {
-                console.log("WebSocket bağlantısı kapandı. Yeniden bağlanılıyor...");
-                setTimeout(connectWebSocket, 5000);
+
+            ws.onclose = function() {
+                console.log('WebSocket bağlantısı kesildi, yeniden bağlanılıyor...');
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(connectWebSocket, 5000);
+                }
             };
-            ws.onerror = (error) => {
-                console.error("WebSocket hatası:", error);
+
+            ws.onerror = function(error) {
+                console.error('WebSocket hatası:', error);
+                ws.close();
             };
         }
 
         function handleMessage(data) {
-            let messageBox = document.getElementById('message_box');
             try {
-                const doc = JSON.parse(data);
+                var doc = JSON.parse(data);
                 if (doc.otaStatus) {
-                    messageBox.innerText = doc.otaStatus;
-                    messageBox.style.color = doc.otaStatus.includes("Hata") ? 'red' : 'green';
+                    const msgBox = document.getElementById('message_box');
+                    msgBox.innerText = doc.otaStatus;
+                    msgBox.className = (doc.otaStatus.includes('Hata') || doc.otaStatus.includes('başarısız')) ? 'error' : 'success';
+                    setTimeout(() => { msgBox.innerText = ''; }, 5000);
                 }
-            } catch (e) {
+            } catch(e) {
                 console.error("JSON ayrıştırma hatası:", e);
-                messageBox.innerText = "WebSocket veri hatası.";
-                messageBox.style.color = 'red';
             }
         }
 
         function uploadFirmware() {
-            let fileInput = document.getElementById('file_input');
+            let fileInput = document.getElementById('firmwareFile');
             if (fileInput.files.length === 0) {
                 document.getElementById('message_box').innerText = 'Lütfen bir dosya seçin.';
-                document.getElementById('message_box').style.color = 'red';
-                setTimeout(() => { document.getElementById('message_box').innerText = ''; }, 5000);
                 return;
             }
             let formData = new FormData();
