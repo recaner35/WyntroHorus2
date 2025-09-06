@@ -135,7 +135,7 @@ jobs:
         run: |
           echo "Kod derleniyor..."
           # `default_ota` şemasını kullanarak LittleFS boyutuyla uyum sağla
-          arduino-cli compile --fqbn esp32:esp32:esp32 --board-options PartitionScheme=default_ota --build-path ./build WyntroHorus2.ino
+          arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=huge_app --build-path ./build WyntroHorus2.ino
 
       - name: Derleme Çıktısını Kontrol Et
         run: |
