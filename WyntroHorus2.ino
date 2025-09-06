@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.53";
+const char* FIRMWARE_VERSION = "v1.0.54";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -82,7 +82,7 @@ String sanitizeString(String input);
 void setup() {
   Serial.begin(115200);
 
-  if (!LittleFS.begin(false)) {  // true => mount başarısızsa formatla
+  if (!LittleFS.begin()) {  // true => mount başarısızsa formatla
     Serial.println("LittleFS mount failed, even after format!");
   } else {
     Serial.println("LittleFS mounted successfully!");
@@ -240,12 +240,26 @@ void writeWiFiSettings() {
 void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   WiFi.mode(WIFI_AP_STA);
-  setupMDNS(); // Ensure mDNS_hostname is set before starting AP
-  if (!WiFi.softAP(mDNS_hostname, default_password)) {
+
+  // MAC adresinin son dört hanesini al
+  byte mac[6];
+  WiFi.macAddress(mac);
+  char mac_suffix[5];
+  sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
+  
+  // SSID adını oluştur
+  char ap_ssid[32];
+  if (strlen(custom_name) > 0) {
+    sprintf(ap_ssid, "%s-%s", custom_name, mac_suffix);
+  } else {
+    sprintf(ap_ssid, "Horus-%s", mac_suffix);
+  }
+  
+  if (!WiFi.softAP(ap_ssid, default_password)) {
     Serial.println("setupWiFi: Failed to start AP!");
     while (true);
   }
-  Serial.println("setupWiFi: AP started: " + String(mDNS_hostname) + ", IP: " + WiFi.softAPIP().toString());
+  Serial.println("setupWiFi: AP started: " + String(ap_ssid) + ", IP: " + WiFi.softAPIP().toString());
   if (strlen(ssid) > 0 && strlen(password) >= 8) {
     WiFi.begin(ssid, password);
     int attempts = 0;
@@ -303,19 +317,22 @@ String sanitizeString(String input) {
 }
 
 void setupMDNS() {
-  String mac = WiFi.macAddress();
-  mac.replace(":", "");
-  String macLast4 = mac.substring(mac.length() - 4);
-  String sanitized_name = sanitizeString(String(custom_name));
-  if (sanitized_name.length() > 0 && sanitized_name.length() <= 20) {
-    strncpy(mDNS_hostname, (sanitized_name + "-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
-    mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
+  // MAC adresinin son dört hanesini al
+  byte mac[6];
+  WiFi.macAddress(mac);
+  char mac_suffix[5];
+  sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
+  
+  // mDNS adını oluştur
+  char mdns_name[32];
+  if (strlen(custom_name) > 0) {
+    sprintf(mdns_name, "%s-%s", custom_name, mac_suffix);
   } else {
-    strncpy(mDNS_hostname, ("horus-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
-    mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
+    sprintf(mdns_name, "horus-%s", mac_suffix);
   }
-  if (MDNS.begin(mDNS_hostname)) {
-    Serial.println("setupMDNS: Started: " + String(mDNS_hostname) + ".local");
+  
+  if (MDNS.begin(mdns_name)) {
+    Serial.println("setupMDNS: Started: " + String(mdns_name) + ".local");
   } else {
     Serial.println("setupMDNS: Failed to start!");
   }
