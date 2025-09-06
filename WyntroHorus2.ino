@@ -1,6 +1,6 @@
 #include <WiFi.h>
 #include <WebServer.h>
-#include <LittleFS.h> // LittleFS kütüphanesi eklendi
+#include <LittleFS.h>
 #include <WebSocketsServer.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.57"; // Seri monitör çıktınıza göre sürümü güncelledim
+const char* FIRMWARE_VERSION = "v1.0.57";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -270,7 +270,6 @@ void setupWiFi() {
 
 String sanitizeString(String input) {
   String result = input;
-  // Türkçe karakterleri dönüştür
   result.replace("ç", "c");
   result.replace("Ç", "C");
   result.replace("ş", "s");
@@ -283,9 +282,7 @@ String sanitizeString(String input) {
   result.replace("Ü", "U");
   result.replace("ö", "o");
   result.replace("Ö", "O");
-  // Boşlukları tire ile değiştir
   result.replace(" ", "-");
-  // Diğer tüm özel karakterleri tire ile değiştir
   String sanitized = "";
   for (int i = 0; i < result.length(); i++) {
     char c = result[i];
@@ -295,11 +292,9 @@ String sanitizeString(String input) {
       sanitized += "-";
     }
   }
-  // Birden fazla tireyi tek tireye indirge
   while (sanitized.indexOf("--") != -1) {
     sanitized.replace("--", "-");
   }
-  // Başta ve sonda tire varsa kaldır
   sanitized.trim();
   while (sanitized.startsWith("-")) sanitized.remove(0, 1);
   while (sanitized.endsWith("-")) sanitized.remove(sanitized.length() - 1, 1);
