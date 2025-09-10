@@ -403,8 +403,7 @@ void setupMDNS() {
 }
 
 void setupWebServer() {
-  server.on("/", HTTP_GET, []() { server.send(200, "text/html", htmlPage()); });
-    Server.on("/manifest.json", HTTP_GET, []() {
+  server.on("/manifest.json", HTTP_GET, []() {
     String manifest = R"rawliteral(
 {
   "name": "Horus by Wyntro",
@@ -429,6 +428,7 @@ void setupWebServer() {
 )rawliteral";
     server.send(200, "application/json", manifest);
   });
+
 
   server.on("/sw.js", HTTP_GET, []() {
     String sw = R"rawliteral(
