@@ -112,6 +112,30 @@ void loop() {
   checkHourlyReset();
 }
 
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
+  if (type == WStype_CONNECTED) {
+    Serial.printf("webSocketEvent: Client [%u] connected\n", num);
+  } else if (type == WStype_DISCONNECTED) {
+    Serial.printf("webSocketEvent: Client [%u] disconnected\n", num);
+  } else if (type == WStype_TEXT) {
+    String message = String((char*)payload);
+    Serial.printf("webSocketEvent: Message from client [%u]: %s\n", num, message.c_str());
+    if (message == "status_request") {
+      updateWebSocket();
+    } else if (message == "ota_check_request") {
+      xTaskCreatePinnedToCore(
+        checkOTAUpdateTask,
+        "OTAUpdateTask",
+        10000,
+        NULL,
+        1,
+        NULL,
+        0
+      );
+    }
+  }
+}
+
 void stepMotor(int step) {
   digitalWrite(IN1, steps[step][0] ? HIGH : LOW);
   digitalWrite(IN2, steps[step][1] ? HIGH : LOW);
