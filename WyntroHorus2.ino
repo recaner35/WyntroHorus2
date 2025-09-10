@@ -879,6 +879,37 @@ String htmlPage() {
             color: var(--text-color);
             box-sizing: border-box;
         }
+        
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .radio-item {
+            flex: 1 1 0;
+            text-align: center;
+        }
+        
+        .radio-item input[type="radio"] {
+            display: none;
+        }
+        
+        .radio-item label {
+            display: block;
+            padding: 10px;
+            background-color: #374151;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .radio-item input[type="radio"]:checked + label {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
 
         .form-group input[type="number"]:focus, .form-group select:focus, .form-group input[type="text"]:focus {
             outline: none;
@@ -921,7 +952,7 @@ String htmlPage() {
         .button.secondary:hover {
             background-color: #6b7280;
         }
-        
+
         #message_box {
             margin-top: 15px;
             padding: 10px;
@@ -980,12 +1011,21 @@ String htmlPage() {
             <p style="text-align: center; margin: 5px 0 0;"><span id="turnDurationValue">15.0</span> s</p>
         </div>
         <div class="form-group">
-            <label for="direction">Yön</label>
-            <select id="directionInput">
-                <option value="1">Sadece İleri</option>
-                <option value="2">Sadece Geri</option>
-                <option value="3">İleri ve Geri</option>
-            </select>
+            <label>Yön</label>
+            <div class="radio-group">
+                <div class="radio-item">
+                    <input type="radio" id="direction1" name="direction" value="1" checked>
+                    <label for="direction1">Sadece İleri</label>
+                </div>
+                <div class="radio-item">
+                    <input type="radio" id="direction2" name="direction" value="2">
+                    <label for="direction2">Sadece Geri</label>
+                </div>
+                <div class="radio-item">
+                    <input type="radio" id="direction3" name="direction" value="3">
+                    <label for="direction3">İleri ve Geri</label>
+                </div>
+            </div>
         </div>
         <div class="button-group">
             <button class="button primary" onclick="sendSettings('start')">Başlat</button>
@@ -1066,7 +1106,10 @@ String htmlPage() {
             if (doc.duration) document.getElementById('turnDurationValue').innerText = doc.duration;
             if (doc.tpd) document.getElementById('turnsPerDayInput').value = doc.tpd;
             if (doc.duration) document.getElementById('turnDurationInput').value = doc.duration;
-            if (doc.direction) document.getElementById('directionInput').value = doc.direction;
+            if (doc.direction) {
+                const radio = document.getElementById('direction' + doc.direction);
+                if (radio) radio.checked = true;
+            }
             if (doc.customName) document.getElementById('nameInput').value = doc.customName;
             if (doc.motorStatus) document.getElementById('motorStatus').innerText = doc.motorStatus;
             if (doc.completedTurns) document.getElementById('completedTurns').innerText = doc.completedTurns;
@@ -1083,20 +1126,6 @@ String htmlPage() {
                     setTimeout(() => { msgBox.style.display = 'none'; }, 5000);
                 }
             }
-
-            if (doc.updateAvailable !== undefined) {
-                const checkButton = document.getElementById('otaCheckButton');
-                if (doc.updateAvailable) {
-                    checkButton.innerText = "Yeni Sürüm Mevcut!";
-                    checkButton.style.backgroundColor = 'green';
-                    checkButton.onclick = () => { window.location.href='/manual_update'; };
-                } else {
-                    checkButton.innerText = "Güncelleme Kontrol Et";
-                    checkButton.style.backgroundColor = '';
-                    checkButton.onclick = () => { checkOTAUpdate(); };
-                }
-            }
-
         } catch(e) {
             console.error("JSON ayrıştırma hatası:", e);
         }
@@ -1105,7 +1134,7 @@ String htmlPage() {
     function sendSettings(action) {
         const turnsPerDay = document.getElementById('turnsPerDayInput').value;
         const turnDuration = document.getElementById('turnDurationInput').value;
-        const direction = document.getElementById('directionInput').value;
+        const direction = document.querySelector('input[name="direction"]:checked').value;
 
         let url = `/set?tpd=${turnsPerDay}&duration=${turnDuration}&dir=${direction}`;
         if (action) {
@@ -1196,7 +1225,6 @@ String htmlPage() {
 )rawliteral";
   return page;
 }
-
 String manualUpdatePage() {
   String page = R"rawliteral(
 <!DOCTYPE html>
