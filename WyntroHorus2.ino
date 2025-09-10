@@ -1790,7 +1790,7 @@ String manualUpdatePage() {
             }
         });
 
-        function uploadFirmware() {
+        	function uploadFirmware() {
             const msgBox = document.getElementById('message_box');
             const fileInput = document.getElementById('firmwareFile');
             const uploadButton = document.getElementById('uploadButton');
