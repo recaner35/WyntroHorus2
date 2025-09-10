@@ -426,8 +426,7 @@ void setupWebServer() {
     }
   ]
 }
-      server.on("/add_other_horus", HTTP_POST, []() {
-    if (otherHorusCount >= MAX_OTHER_HORUS) {
+)rawliteral";
       server.send(200, "text/plain", "Error: Maximum number of devices reached.");
       return;
     }
