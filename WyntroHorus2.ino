@@ -403,6 +403,8 @@ void setupMDNS() {
 }
 
 void setupWebServer() {
+  server.on("/", HTTP_GET, []() { server.send(200, "text/html", htmlPage()); });
+  
   server.on("/manifest.json", HTTP_GET, []() {
     String manifest = R"rawliteral(
 {
@@ -429,7 +431,6 @@ void setupWebServer() {
     server.send(200, "application/json", manifest);
   });
 
-
   server.on("/sw.js", HTTP_GET, []() {
     String sw = R"rawliteral(
 self.addEventListener('install', (event) => {
@@ -455,6 +456,7 @@ self.addEventListener('fetch', (event) => {
     )rawliteral";
     server.send(200, "application/javascript", sw);
   });
+
   server.on("/icon-192x192.png", HTTP_GET, []() {
     File file = LittleFS.open("/icon-192x192.png", "r");
     if (!file) {
@@ -464,6 +466,7 @@ self.addEventListener('fetch', (event) => {
     server.streamFile(file, "image/png");
     file.close();
   });
+
   server.on("/icon-512x512.png", HTTP_GET, []() {
     File file = LittleFS.open("/icon-512x512.png", "r");
     if (!file) {
@@ -473,9 +476,11 @@ self.addEventListener('fetch', (event) => {
     server.streamFile(file, "image/png");
     file.close();
   });
+
   server.on("/set", HTTP_GET, handleSet);
   server.on("/scan", HTTP_GET, handleScan);
   server.on("/save_wifi", HTTP_POST, handleSaveWiFi);
+  
   server.on("/add_other_horus", HTTP_POST, []() {
     if (otherHorusCount >= MAX_OTHER_HORUS) {
       server.send(200, "text/plain", "Error: Maximum number of devices reached.");
@@ -489,10 +494,12 @@ self.addEventListener('fetch', (event) => {
       saveOtherHorusList();
       server.send(200, "text/plain", "OK");
     } else {
-      server.send(200, "text/plain", "Error: Invalid mDNS name.");
+     server.send(200, "text/plain", "Error: Invalid mDNS name.");
     }
-});
+  });
+
   server.on("/status", HTTP_GET, handleStatus);
+  
   server.on("/check_update", HTTP_GET, []() {
     xTaskCreate(
         checkOTAUpdateTask,
@@ -503,12 +510,15 @@ self.addEventListener('fetch', (event) => {
         NULL);
     server.send(200, "text/plain", "OTA check started.");
   });
+  
   server.on("/manual_update", HTTP_GET, []() { server.send(200, "text/html", manualUpdatePage()); });
   server.on("/manual_update", HTTP_POST, []() { server.client().setTimeout(30000); }, handleManualUpdate);
+  
   server.begin();
   Serial.println("setupWebServer: Web server started.");
   Serial.println("setupWebServer: Web socket server started.");
 }
+
 
 void handleSet() {
   if (server.hasArg("tpd")) turnsPerDay = server.arg("tpd").toInt();
