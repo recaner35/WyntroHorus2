@@ -422,6 +422,23 @@ void setupWebServer() {
     }
   ]
 }
+      server.on("/add_other_horus", HTTP_POST, []() {
+    if (otherHorusCount >= MAX_OTHER_HORUS) {
+      server.send(200, "text/plain", "Error: Maximum number of devices reached.");
+      return;
+    }
+    String mdns_name = server.arg("mdns_name");
+    if (mdns_name.length() > 0 && mdns_name.length() < 32) {
+      // Yalnızca MDNS adını kaydet
+      strncpy(otherHorusList[otherHorusCount], mdns_name.c_str(), 31);
+      otherHorusList[otherHorusCount][31] = '\0';
+      otherHorusCount++;
+      saveOtherHorusList();
+      server.send(200, "text/plain", "OK");
+    } else {
+      server.send(200, "text/plain", "Error: Invalid mDNS name.");
+    }
+});
     )rawliteral";
     server.send(200, "application/json", manifest);
   });
@@ -853,24 +870,23 @@ void checkOTAUpdateTask(void *parameter) {
 }
 void updateWebSocket() {
   StaticJsonDocument<512> doc;
+  doc["motorStatus"] = running ? "Çalışıyor" : "Durduruldu";
+  doc["completedTurns"] = completedTurns;
   doc["tpd"] = turnsPerDay;
   doc["duration"] = turnDuration;
   doc["direction"] = direction;
-  doc["customName"] = custom_name;
-  doc["completedTurns"] = completedTurns;
-  doc["hourlyTurns"] = hourlyTurns;
-  doc["status"] = running ? "Çalışıyor" : "Durduruldu";
-  if (WiFi.status() == WL_CONNECTED) {
-    doc["ip"] = WiFi.localIP().toString();
-    doc["ap"] = false;
-  } else {
-    doc["ip"] = WiFi.softAPIP().toString();
-    doc["ap"] = true;
+  doc["ip"] = WiFi.localIP().toString();
+  doc["version"] = FIRMWARE_VERSION;
+
+  // Diğer Horus cihazlarının listesini ekle
+  JsonArray otherHorus = doc.createNestedArray("otherHorus");
+  for (int i = 0; i < otherHorusCount; i++) {
+    otherHorus.add(otherHorusList[i]);
   }
+
   String json;
   serializeJson(doc, json);
   webSocket.broadcastTXT(json);
-  Serial.println("updateWebSocket: Sent update.");
 }
 
 String htmlPage() {
@@ -1094,6 +1110,37 @@ String htmlPage() {
             color: #1f2937;
             border-color: #d1d5db;
         }
+
+        .other-horus-list {
+            margin-top: 15px;
+        }
+
+        .other-horus-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            background-color: #374151;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-bottom: 5px;
+        }
+
+        body.light .other-horus-item {
+            background-color: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .other-horus-item span {
+            flex-grow: 1;
+            text-align: left;
+            padding-right: 10px;
+        }
+
+        .other-horus-item .button {
+            padding: 8px 12px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -1117,10 +1164,6 @@ String htmlPage() {
             <div class="status-item">
                 <span>Dönüş Süresi</span>
                 <h3 id="turnDuration">15 s</h3>
-            </div>
-            <div class="status-item">
-                <span>IP Adresi</span>
-                <h3 id="ipAddress"></h3>
             </div>
         </div>
     </div>
@@ -1183,13 +1226,13 @@ String htmlPage() {
 
     <div class="card">
         <h2>Cihaz Güncelleme</h2>
-        <div class="form-group">
+        <div class="status-section">
             <div class="status-item">
                 <span>Güncel Sürüm</span>
                 <h3 id="currentVersion">Yükleniyor...</h3>
             </div>
             <div class="status-item">
-                <span>Web arayüzü:</span>
+                <span>Web Arayüzü:</span>
                 <h3 id="ipAddress"></h3>
             </div>
         </div>
@@ -1198,6 +1241,17 @@ String htmlPage() {
             <button class="button secondary" onclick="window.location.href='/manual_update'">Manuel Güncelleme</button>
         </div>
         <p id="message_box" style="display:none; text-align: center;"></p>
+    </div>
+
+    <div class="card">
+        <h2>Diğer Horus Cihazları</h2>
+        <div class="form-group">
+            <label for="otherHorusName">MDNS Adı (Örn: horus-D99D)</label>
+            <input type="text" id="otherHorusName" placeholder="Cihaz adını buraya girin">
+            <button class="button primary" onclick="addOtherHorus()">Ekle</button>
+        </div>
+        <div class="other-horus-list" id="otherHorusList">
+            </div>
     </div>
 
     <div class="card">
@@ -1279,6 +1333,11 @@ String htmlPage() {
                     setTimeout(() => { msgBox.style.display = 'none'; }, 5000);
                 }
             }
+            
+            if (doc.otherHorus) {
+                renderOtherHorusList(doc.otherHorus);
+            }
+
         } catch(e) {
             console.error("JSON ayrıştırma hatası:", e);
         }
@@ -1313,6 +1372,67 @@ String htmlPage() {
             console.error('WebSocket hatası:', error);
             ws.close();
         };
+    }
+
+    function renderOtherHorusList(devices) {
+        const listContainer = document.getElementById('otherHorusList');
+        listContainer.innerHTML = '';
+        if (devices.length === 0) {
+            listContainer.innerHTML = '<p style="text-align: center; color: var(--secondary-color);">Henüz başka cihaz eklenmemiş.</p>';
+            return;
+        }
+        devices.forEach(device => {
+            const item = document.createElement('div');
+            item.className = 'other-horus-item';
+            item.innerHTML = `
+                <span>${device}.local</span>
+                <div class="button-group">
+                    <button class="button primary" onclick="controlOtherHorus('${device}', 'start')">Başlat</button>
+                    <button class="button secondary" onclick="controlOtherHorus('${device}', 'stop')">Durdur</button>
+                    <button class="button secondary" onclick="controlOtherHorus('${device}', 'reset')">Sıfırla</button>
+                </div>
+            `;
+            listContainer.appendChild(item);
+        });
+    }
+
+    function addOtherHorus() {
+        const mdnsName = document.getElementById('otherHorusName').value;
+        if (!mdnsName) {
+            alert("Lütfen bir MDNS adı girin.");
+            return;
+        }
+        
+        fetch('/add_other_horus', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `mdns_name=${encodeURIComponent(mdnsName)}`
+        })
+        .then(response => response.text())
+        .then(data => {
+            console.log("Cihaz ekleme yanıtı:", data);
+            alert("Cihaz eklendi: " + mdnsName);
+            document.getElementById('otherHorusName').value = "";
+            requestStatusUpdate();
+        })
+        .catch(error => {
+            console.error('Cihaz ekleme hatası:', error);
+            alert('Cihaz eklenirken bir hata oluştu.');
+        });
+    }
+
+    function controlOtherHorus(mdnsName, action) {
+        console.log(`Cihaz ${mdnsName} için ${action} komutu gönderiliyor...`);
+        fetch(`http://${mdnsName}.local/set?action=${action}`)
+            .then(response => response.text())
+            .then(data => {
+                console.log(`Yanıt (${mdnsName}):`, data);
+                alert(`${mdnsName}.local cihazı için komut başarıyla gönderildi.`);
+            })
+            .catch(error => {
+                console.error(`Cihaz (${mdnsName}) kontrol hatası:`, error);
+                alert(`${mdnsName}.local cihazına bağlanılamadı.`);
+            });
     }
 
     function sendSettings(action) {
