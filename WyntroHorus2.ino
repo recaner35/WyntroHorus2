@@ -267,80 +267,79 @@ void writeWiFiSettings() {
 
 void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
-  WiFi.mode(WIFI_AP_STA);
-  setupMDNS();
-  if (!WiFi.softAP(mDNS_hostname, default_password)) {
-    Serial.println("setupWiFi: Failed to start AP!");
-    while (true);
-  }
-  Serial.println("setupWiFi: AP started: " + String(mDNS_hostname) + ", IP: " + WiFi.softAPIP().toString());
-  if (strlen(ssid) > 0 && strlen(password) >= 8) {
+  readSettings(); // Ayarları buradan okuyun
+  
+  if (strcmp(ssid, "") == 0) {
+    Serial.println("setupWiFi: Invalid WiFi credentials, running in AP mode only.");
+    byte mac[6];
+    WiFi.macAddress(mac);
+    char macStr[13];
+    sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    
+    // AP adını MAC adresinin son 4 hanesine göre oluştur
+    char apSsid[32];
+    sprintf(apSsid, "Horus-%s%s", macStr + 8, macStr + 10);
+    
+    WiFi.softAP(apSsid, default_password);
+    IPAddress apIP = WiFi.softAPIP();
+    Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
+    
+    // mDNS ana bilgisayar adını AP adına göre ayarla
+    sprintf(mDNS_hostname, "horus-%s%s", macStr + 8, macStr + 10);
+
+  } else {
+    WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
+    Serial.printf("setupWiFi: Connecting to %s", ssid);
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 20) {
       delay(500);
       Serial.print(".");
       attempts++;
     }
+    
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nsetupWiFi: Connected to " + String(ssid) + ", IP: " + WiFi.localIP().toString());
+      Serial.printf("\nsetupWiFi: Connected to %s, IP: %s\n", ssid, WiFi.localIP().toString().c_str());
+      
+      // mDNS ana bilgisayar adını ayarla
+      if (strcmp(custom_name, "") != 0) {
+        strncpy(mDNS_hostname, custom_name, sizeof(mDNS_hostname) - 1);
+        mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
+      } else {
+        byte mac[6];
+        WiFi.macAddress(mac);
+        char macStr[13];
+        sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        sprintf(mDNS_hostname, "horus-%s%s", macStr + 8, macStr + 10);
+      }
+      
     } else {
-      Serial.println("\nsetupWiFi: Connection failed, continuing in AP mode.");
-    }
-  } else {
-    Serial.println("setupWiFi: Invalid WiFi credentials, running in AP mode only.");
-  }
-}
-
-String sanitizeString(String input) {
-  String result = input;
-  result.replace("ç", "c");
-  result.replace("Ç", "C");
-  result.replace("ş", "s");
-  result.replace("Ş", "S");
-  result.replace("ı", "i");
-  result.replace("İ", "I");
-  result.replace("ğ", "g");
-  result.replace("Ğ", "G");
-  result.replace("ü", "u");
-  result.replace("Ü", "U");
-  result.replace("ö", "o");
-  result.replace("Ö", "O");
-  result.replace(" ", "-");
-  String sanitized = "";
-  for (int i = 0; i < result.length(); i++) {
-    char c = result[i];
-    if (isAlphaNumeric(c) || c == '-') {
-      sanitized += c;
-    } else {
-      sanitized += "-";
+      Serial.println("\nsetupWiFi: Failed to connect, running in AP mode.");
+      // Eğer bağlantı başarısız olursa AP moduna dön
+      WiFi.mode(WIFI_AP);
+      byte mac[6];
+      WiFi.macAddress(mac);
+      char macStr[13];
+      sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+      char apSsid[32];
+      sprintf(apSsid, "Horus-%s%s", macStr + 8, macStr + 10);
+      WiFi.softAP(apSsid, default_password);
+      IPAddress apIP = WiFi.softAPIP();
+      Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
+      
+      // mDNS ana bilgisayar adını AP adına göre ayarla
+      sprintf(mDNS_hostname, "horus-%s%s", macStr + 8, macStr + 10);
     }
   }
-  while (sanitized.indexOf("--") != -1) {
-    sanitized.replace("--", "-");
-  }
-  sanitized.trim();
-  while (sanitized.startsWith("-")) sanitized.remove(0, 1);
-  while (sanitized.endsWith("-")) sanitized.remove(sanitized.length() - 1, 1);
-  return sanitized;
 }
 
 void setupMDNS() {
-  String mac = WiFi.softAPmacAddress();
-  mac.replace(":", "");
-  String macLast4 = mac.substring(mac.length() - 4);
-  String sanitized_name = sanitizeString(String(custom_name));
-  if (sanitized_name.length() > 0 && sanitized_name.length() <= 20) {
-    strncpy(mDNS_hostname, (sanitized_name + "-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
-    mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
+  if (mDNS.begin(mDNS_hostname)) {
+    Serial.printf("setupMDNS: Started: %s.local\n", mDNS_hostname);
+    mDNS.addService("http", "tcp", 80);
+    mDNS.addService("ws", "tcp", 81);
   } else {
-    strncpy(mDNS_hostname, ("horus-" + macLast4).c_str(), sizeof(mDNS_hostname) - 1);
-    mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
-  }
-  if (MDNS.begin(mDNS_hostname)) {
-    Serial.println("setupMDNS: Started: " + String(mDNS_hostname) + ".local");
-  } else {
-    Serial.println("setupMDNS: Failed to start!");
+    Serial.println("setupMDNS: failed to start!");
   }
 }
 
