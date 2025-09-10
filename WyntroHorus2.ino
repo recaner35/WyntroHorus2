@@ -8,6 +8,10 @@
 #include <EEPROM.h>
 #include <Update.h>
 #include <vector> // Cihaz listesi için
+#include <ESPmDNS.h>
+
+// mDNS nesnesini tanımla
+MDNSResponder mDNS;
 
 // Diğer Horus cihazlarının listesi
 const int MAX_OTHER_HORUS = 5;
@@ -98,7 +102,7 @@ void setup() {
   }
 
   LittleFS.begin();
-  loadSettings();
+  readSettings();
   loadOtherHorusList(); // Cihaz listesini yükle
   setupWiFi();
   setupMDNS();
