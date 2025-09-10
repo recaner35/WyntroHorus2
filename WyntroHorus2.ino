@@ -1718,16 +1718,13 @@ String manualUpdatePage() {
             font-family: Arial, sans-serif;
             margin: 20px;
             text-align: center;
-            background-color: #111827;
-            color: #f9fafb;
         }
         .container {
             max-width: 500px;
             margin: auto;
             padding: 20px;
-            border: 1px solid #4b5563;
+            border: 1px solid #ccc;
             border-radius: 10px;
-            background-color: #1f2937;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
         #message_box {
@@ -1746,25 +1743,11 @@ String manualUpdatePage() {
         }
         input[type="file"] {
             margin-top: 10px;
-            padding: 8px;
-            background-color: #374151;
-            border: 1px solid #4b5563;
-            color: #f9fafb;
-            border-radius: 5px;
         }
         button {
             margin-top: 10px;
             padding: 10px 20px;
             cursor: pointer;
-            background-color: #3b82f6;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: background-color 0.3s ease;
-        }
-        button:hover {
-            background-color: #2563eb;
         }
     </style>
 </head>
@@ -1774,66 +1757,96 @@ String manualUpdatePage() {
         <p>Firmware dosyasını (.bin) seçin ve yükle'ye basın.</p>
         <input type="file" id="firmwareFile" accept=".bin">
         <br>
-        <button id="uploadButton" onclick="uploadFirmware()">Yükle</button>
+        <button onclick="uploadFirmware()">Yükle</button>
         <div id="message_box"></div>
     </div>
 
     <script>
-        document.getElementById('firmwareFile').addEventListener('change', function() {
-            const msgBox = document.getElementById('message_box');
-            if (this.files.length > 0) {
-                msgBox.innerText = this.files[0].name + " seçildi.";
-                msgBox.className = 'success';
-            } else {
-                msgBox.innerText = "Dosya seçilmedi.";
-                msgBox.className = 'error';
-            }
-        });
-
-                function uploadFirmware() {
-            const msgBox = document.getElementById('message_box');
-            const fileInput = document.getElementById('firmwareFile');
-            const uploadButton = document.getElementById('uploadButton');
-
-            if (fileInput.files.length === 0) {
-                msgBox.innerText = 'Lütfen bir dosya seçin.';
-                msgBox.className = 'error';
+        var ws;
+        var reconnectInterval;
+        
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
                 return;
             }
 
-            msgBox.innerText = 'Yükleniyor...';
-            msgBox.className = 'success';
-            uploadButton.disabled = true;
+            ws = new WebSocket('ws://' + window.location.hostname + ':81/');
 
-            const formData = new FormData();
+            ws.onopen = function() {
+                console.log('WebSocket bağlantısı açıldı.');
+                clearInterval(reconnectInterval);
+            };
+
+            ws.onmessage = function(event) {
+                console.log('Gelen mesaj:', event.data);
+                handleMessage(event.data);
+            };
+
+            ws.onclose = function() {
+                console.log('WebSocket bağlantısı kesildi, yeniden bağlanılıyor...');
+                if (!reconnectInterval) {
+                    reconnectInterval = setInterval(connectWebSocket, 5000);
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket hatası:', error);
+                ws.close();
+            };
+        }
+
+        function handleMessage(data) {
+            try {
+                var doc = JSON.parse(data);
+                if (doc.otaStatus) {
+                    const msgBox = document.getElementById('message_box');
+                    msgBox.innerText = doc.otaStatus;
+                    msgBox.className = (doc.otaStatus.includes('Hata') || doc.otaStatus.includes('başarısız')) ? 'error' : 'success';
+                    setTimeout(() => { msgBox.innerText = ''; }, 5000);
+                }
+            } catch(e) {
+                console.error("JSON ayrıştırma hatası:", e);
+            }
+        }
+
+        function uploadFirmware() {
+            let fileInput = document.getElementById('firmwareFile');
+            if (fileInput.files.length === 0) {
+                document.getElementById('message_box').innerText = 'Lütfen bir dosya seçin.';
+                return;
+            }
+            let formData = new FormData();
             formData.append('firmware', fileInput.files[0]);
-
             fetch('/manual_update', {
                 method: 'POST',
                 body: formData
             })
-            .then(response => {
-                if (response.status >= 400) {
-                    throw new Error('Sunucu hatası: ' + response.status);
-                }
-                return response.text();
-            })
+            .then(response => response.text())
             .then(data => {
-                console.log('Sunucudan yanıt:', data);
-                msgBox.innerText = 'Güncelleme başarıyla gönderildi!';
-                msgBox.className = 'success';
-                setTimeout(() => {
-                    msgBox.innerText = '';
-                }, 5000);
+                console.log(data);
+                document.getElementById('message_box').innerText = 'Güncelleme gönderildi.';
+                document.getElementById('message_box').style.color = 'green';
+                setTimeout(() => { document.getElementById('message_box').innerText = ''; }, 5000);
             })
             .catch(error => {
-                console.error('Yükleme hatası:', error);
-                msgBox.innerText = 'Yükleme sırasında bir hata oluştu: ' + error.message;
-                msgBox.className = 'error';
-                uploadButton.disabled = false;
+                console.error('Hata:', error);
+                document.getElementById('message_box').innerText = 'Güncelleme gönderilirken hata oluştu.';
+                document.getElementById('message_box').style.color = 'red';
+                setTimeout(() => { document.getElementById('message_box').innerText = ''; }, 5000);
             });
         }
-   </script>
+
+        window.onload = function() {
+            connectWebSocket();
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').then((reg) => {
+                    console.log('Service Worker registered:', reg);
+                }).catch((error) => {
+                    console.error('Service Worker registration failed:', error);
+                });
+            }
+        };
+    </script>
 </body>
 </html>
 )rawliteral";
