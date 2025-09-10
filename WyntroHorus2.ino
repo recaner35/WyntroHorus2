@@ -20,7 +20,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.59";
+const char* FIRMWARE_VERSION = "v1.0.60";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -1790,7 +1790,7 @@ String manualUpdatePage() {
             }
         });
 
-        	function uploadFirmware() {
+                function uploadFirmware() {
             const msgBox = document.getElementById('message_box');
             const fileInput = document.getElementById('firmwareFile');
             const uploadButton = document.getElementById('uploadButton');
