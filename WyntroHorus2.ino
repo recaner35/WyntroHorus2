@@ -895,7 +895,7 @@ void updateWebSocket() {
 
 String htmlPage() {
   String page = R"rawliteral(
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
