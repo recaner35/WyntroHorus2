@@ -10,7 +10,7 @@
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.58";
+const char* FIRMWARE_VERSION = "v1.0.59";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -589,6 +589,7 @@ void checkOTAUpdateTask(void *parameter) {
   Serial.println("checkOTAUpdateTask: Started.");
   StaticJsonDocument<256> statusDoc;
   String json;
+
   if (WiFi.status() != WL_CONNECTED) {
     statusDoc["otaStatus"] = "Hata: İnternet bağlantısı yok, lütfen WiFi ağına bağlanın.";
     statusDoc["updateAvailable"] = false;
@@ -598,35 +599,53 @@ void checkOTAUpdateTask(void *parameter) {
     vTaskDelete(NULL);
     return;
   }
+
   HTTPClient http;
   http.setTimeout(15000);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   http.setRedirectLimit(5);
   http.addHeader("Accept", "application/vnd.github.v3+json");
   http.addHeader("User-Agent", "ESP32-WyntroHorus2/1.0");
-  IPAddress githubIP;
-  if (!WiFi.hostByName("api.github.com", githubIP)) {
-    statusDoc["otaStatus"] = "Hata: DNS çözümlemesi başarısız.";
+
+  Serial.println("checkOTAUpdateTask: Fetching latest release from " + String(github_url));
+  
+  if (!http.begin(github_url)) {
+    statusDoc["otaStatus"] = "Hata: HTTP bağlantısı başlatılamadı.";
     statusDoc["updateAvailable"] = false;
     serializeJson(statusDoc, json);
     webSocket.broadcastTXT(json);
-    Serial.println("checkOTAUpdateTask: DNS resolution failed for api.github.com");
+    Serial.println("checkOTAUpdateTask: Failed to begin HTTP connection.");
+    http.end();
     vTaskDelete(NULL);
     return;
   }
-  Serial.println("checkOTAUpdateTask: DNS resolved, IP: " + githubIP.toString());
-  http.begin(github_url);
-  Serial.println("checkOTAUpdateTask: Fetching latest release from " + String(github_url));
+
   int httpCode = http.GET();
   Serial.printf("checkOTAUpdateTask: HTTP response code: %d\n", httpCode);
+
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
+    
+    // Yanıtın boş olup olmadığını kontrol edin
+    if (payload.length() == 0) {
+      statusDoc["otaStatus"] = "Hata: GitHub'dan boş yanıt alındı.";
+      statusDoc["updateAvailable"] = false;
+      serializeJson(statusDoc, json);
+      webSocket.broadcastTXT(json);
+      Serial.println("checkOTAUpdateTask: Received empty response from GitHub.");
+      http.end();
+      vTaskDelete(NULL);
+      return;
+    }
+
     StaticJsonDocument<1024> doc;
     DeserializationError error = deserializeJson(doc, payload);
+
     if (!error) {
       String latestVersion = doc["tag_name"].as<String>();
       String currentVersion = String(FIRMWARE_VERSION);
       Serial.println("checkOTAUpdateTask: Latest version: " + latestVersion + ", Current version: " + currentVersion);
+
       if (isNewVersionAvailable(latestVersion, currentVersion)) {
         statusDoc["otaStatus"] = "Yeni sürüm mevcut: " + latestVersion;
         statusDoc["updateAvailable"] = true;
@@ -638,36 +657,46 @@ void checkOTAUpdateTask(void *parameter) {
             break;
           }
         }
+
         if (binUrl.length() > 0) {
           Serial.println("checkOTAUpdateTask: Downloading firmware from " + binUrl);
           statusDoc["otaStatus"] = "Güncelleme indiriliyor: " + latestVersion;
           serializeJson(statusDoc, json);
           webSocket.broadcastTXT(json);
           http.end();
-          http.begin(binUrl);
-          http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-          http.setRedirectLimit(5);
-          http.addHeader("User-Agent", "ESP32-WyntroHorus2/1.0");
+
+          // Yönlendirme hatasını çözmek için yeni bir HTTPClient nesnesi kullanacağız
+          HTTPClient http_bin;
+          http_bin.setTimeout(15000);
+          http_bin.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+          http_bin.setRedirectLimit(5);
+          http_bin.addHeader("User-Agent", "ESP32-WyntroHorus2/1.0");
+
+          http_bin.begin(binUrl);
           Serial.println("checkOTAUpdateTask: Initiating HTTP GET for firmware...");
-          int httpCodeBin = http.GET();
+          int httpCodeBin = http_bin.GET();
           Serial.printf("checkOTAUpdateTask: Firmware HTTP response code: %d\n", httpCodeBin);
+
           if (httpCodeBin == HTTP_CODE_OK) {
-            size_t size = http.getSize();
+            size_t size = http_bin.getSize();
             Serial.println("checkOTAUpdateTask: File size: " + String(size));
+
             if (size <= 0) {
               statusDoc["otaStatus"] = "Hata: Dosya boyutu bilinmiyor.";
               statusDoc["updateAvailable"] = false;
               serializeJson(statusDoc, json);
               webSocket.broadcastTXT(json);
               Serial.println("checkOTAUpdateTask: Unknown file size.");
-              http.end();
+              http_bin.end();
               vTaskDelete(NULL);
               return;
             }
+
             if (Update.begin(size)) {
               Serial.println("checkOTAUpdateTask: Starting OTA update, size: " + String(size));
-              WiFiClient *client = http.getStreamPtr();
+              WiFiClient *client = http_bin.getStreamPtr();
               size_t written = Update.writeStream(*client);
+              
               if (written == size) {
                 Serial.println("checkOTAUpdateTask: Firmware written successfully.");
                 if (Update.end(true)) {
@@ -700,7 +729,7 @@ void checkOTAUpdateTask(void *parameter) {
             webSocket.broadcastTXT(json);
             Serial.println("checkOTAUpdateTask: Failed to download firmware, HTTP code: " + String(httpCodeBin));
           }
-          http.end();
+          http_bin.end();
         } else {
           statusDoc["otaStatus"] = "Hata: .bin dosyası bulunamadı.";
           statusDoc["updateAvailable"] = false;
@@ -721,30 +750,13 @@ void checkOTAUpdateTask(void *parameter) {
     statusDoc["updateAvailable"] = false;
     Serial.println("checkOTAUpdateTask: HTTP error: " + String(httpCode));
   }
+
   http.end();
   serializeJson(statusDoc, json);
   webSocket.broadcastTXT(json);
   Serial.println("checkOTAUpdateTask: Completed.");
   vTaskDelete(NULL);
 }
-
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
-  if (type == WStype_CONNECTED) {
-    Serial.printf("webSocketEvent: Client [%u] connected\n", num);
-    updateWebSocket();
-  } else if (type == WStype_DISCONNECTED) {
-    Serial.printf("webSocketEvent: Client [%u] disconnected\n", num);
-  } else if (type == WStype_TEXT) {
-    String msg = String((char *)payload);
-    Serial.printf("webSocketEvent: Received message: %s\n", msg.c_str());
-    if (msg == "status_request") {
-      updateWebSocket();
-    } else if (msg == "ota_check_request") {
-      xTaskCreate(checkOTAUpdateTask, "CheckOTAUpdateTask", 8192, NULL, 1, NULL);
-    }
-  }
-}
-
 void updateWebSocket() {
   StaticJsonDocument<512> doc;
   doc["tpd"] = turnsPerDay;
