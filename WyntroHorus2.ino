@@ -1833,7 +1833,7 @@ String manualUpdatePage() {
                 uploadButton.disabled = false;
             });
         }
-    </script>
+   </script>
 </body>
 </html>
 )rawliteral";
