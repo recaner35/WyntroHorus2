@@ -7,6 +7,12 @@
 #include <ESPmDNS.h>
 #include <EEPROM.h>
 #include <Update.h>
+#include <vector> // Cihaz listesi için
+
+// Diğer Horus cihazlarının listesi
+const int MAX_OTHER_HORUS = 5;
+char otherHorusList[MAX_OTHER_HORUS][32];
+int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
@@ -91,6 +97,12 @@ void setup() {
     Serial.println("LittleFS mounted successfully!");
   }
 
+  LittleFS.begin();
+  loadSettings();
+  loadOtherHorusList(); // Cihaz listesini yükle
+  setupWiFi();
+  setupMDNS();
+  setupWebServer();
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
@@ -135,7 +147,50 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     }
   }
 }
+void saveOtherHorusList() {
+  StaticJsonDocument<512> doc;
+  JsonArray devices = doc.createNestedArray("devices");
+  for (int i = 0; i < otherHorusCount; i++) {
+    devices.add(otherHorusList[i]);
+  }
 
+  File file = LittleFS.open("/other_horus.json", "w");
+  if (!file) {
+    Serial.println("saveOtherHorusList: Dosya açma hatası.");
+    return;
+  }
+  serializeJson(doc, file);
+  file.close();
+  Serial.println("saveOtherHorusList: Diğer Horus cihazları kaydedildi.");
+}
+
+void loadOtherHorusList() {
+  File file = LittleFS.open("/other_horus.json", "r");
+  if (!file) {
+    Serial.println("loadOtherHorusList: Dosya bulunamadı, varsayılan liste kullanılıyor.");
+    return;
+  }
+
+  StaticJsonDocument<512> doc;
+  DeserializationError error = deserializeJson(doc, file);
+  if (error) {
+    Serial.printf("loadOtherHorusList: JSON ayrıştırma hatası: %s\n", error.c_str());
+    file.close();
+    return;
+  }
+  
+  JsonArray devices = doc["devices"].as<JsonArray>();
+  otherHorusCount = 0;
+  for (JsonVariant v : devices) {
+    if (otherHorusCount < MAX_OTHER_HORUS) {
+      strncpy(otherHorusList[otherHorusCount], v.as<const char*>(), 31);
+      otherHorusList[otherHorusCount][31] = '\0';
+      otherHorusCount++;
+    }
+  }
+  file.close();
+  Serial.println("loadOtherHorusList: Diğer Horus cihazları yüklendi.");
+}
 void stepMotor(int step) {
   digitalWrite(IN1, steps[step][0] ? HIGH : LOW);
   digitalWrite(IN2, steps[step][1] ? HIGH : LOW);
@@ -416,6 +471,22 @@ self.addEventListener('fetch', (event) => {
   server.on("/set", HTTP_GET, handleSet);
   server.on("/scan", HTTP_GET, handleScan);
   server.on("/save_wifi", HTTP_POST, handleSaveWiFi);
+  server.on("/add_other_horus", HTTP_POST, []() {
+    if (otherHorusCount >= MAX_OTHER_HORUS) {
+      server.send(200, "text/plain", "Error: Maximum number of devices reached.");
+      return;
+    }
+    String mdns_name = server.arg("mdns_name");
+    if (mdns_name.length() > 0 && mdns_name.length() < 32) {
+      strncpy(otherHorusList[otherHorusCount], mdns_name.c_str(), 31);
+      otherHorusList[otherHorusCount][31] = '\0';
+      otherHorusCount++;
+      saveOtherHorusList();
+      server.send(200, "text/plain", "OK");
+    } else {
+      server.send(200, "text/plain", "Error: Invalid mDNS name.");
+    }
+});
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/check_update", HTTP_GET, []() {
     xTaskCreate(
@@ -809,7 +880,7 @@ String htmlPage() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Horus v1.0.58</title>
+    <title>Horus</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icon-192x192.png">
@@ -821,6 +892,15 @@ String htmlPage() {
             --secondary-color: #d1d5db;
             --card-bg: #1f2937;
             --border-color: #4b5563;
+        }
+
+        body.light {
+            --bg-color: #f3f4f6;
+            --text-color: #1f2937;
+            --primary-color: #2563eb;
+            --secondary-color: #4b5563;
+            --card-bg: #ffffff;
+            --border-color: #d1d5db;
         }
 
         body {
@@ -852,6 +932,10 @@ String htmlPage() {
         h1, h2 {
             color: var(--primary-color);
             text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5em;
         }
 
         .status-section {
@@ -902,6 +986,17 @@ String htmlPage() {
             color: var(--text-color);
             box-sizing: border-box;
         }
+
+        body.light .form-group input[type="number"], body.light .form-group select, body.light .form-group input[type="text"] {
+            background-color: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .form-group input[type="number"]:focus, .form-group select:focus, .form-group input[type="text"]:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+        }
         
         .radio-group {
             display: flex;
@@ -929,15 +1024,15 @@ String htmlPage() {
             transition: all 0.2s ease;
         }
         
+        body.light .radio-item label {
+            background-color: #e5e7eb;
+            color: #1f2937;
+        }
+
         .radio-item input[type="radio"]:checked + label {
             background-color: var(--primary-color);
             border-color: var(--primary-color);
-        }
-
-        .form-group input[type="number"]:focus, .form-group select:focus, .form-group input[type="text"]:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+            color: var(--text-color);
         }
 
         .button-group {
@@ -975,6 +1070,14 @@ String htmlPage() {
         .button.secondary:hover {
             background-color: #6b7280;
         }
+        
+        body.light .button.secondary {
+            background-color: #e5e7eb;
+            color: #1f2937;
+        }
+        body.light .button.secondary:hover {
+            background-color: #d1d5db;
+        }
 
         #message_box {
             margin-top: 15px;
@@ -986,13 +1089,18 @@ String htmlPage() {
             text-align: center;
             display: none;
         }
+        body.light #message_box {
+            background-color: #e5e7eb;
+            color: #1f2937;
+            border-color: #d1d5db;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="card">
-        <h1>Horus v1.0.58</h1>
+        <h1>Horus</h1>
         <div class="status-section">
             <div class="status-item">
                 <span>Motor Durumu</span>
@@ -1009,10 +1117,6 @@ String htmlPage() {
             <div class="status-item">
                 <span>Dönüş Süresi</span>
                 <h3 id="turnDuration">15 s</h3>
-            </div>
-            <div class="status-item">
-                <span>Yön</span>
-                <h3 id="direction"></h3>
             </div>
             <div class="status-item">
                 <span>IP Adresi</span>
@@ -1079,17 +1183,106 @@ String htmlPage() {
 
     <div class="card">
         <h2>Cihaz Güncelleme</h2>
+        <div class="form-group">
+            <div class="status-item">
+                <span>Güncel Sürüm</span>
+                <h3 id="currentVersion">Yükleniyor...</h3>
+            </div>
+            <div class="status-item">
+                <span>Web arayüzü:</span>
+                <h3 id="ipAddress"></h3>
+            </div>
+        </div>
         <div class="button-group">
             <button class="button primary" onclick="checkOTAUpdate()">Güncelleme Kontrol Et</button>
             <button class="button secondary" onclick="window.location.href='/manual_update'">Manuel Güncelleme</button>
         </div>
         <p id="message_box" style="display:none; text-align: center;"></p>
     </div>
+
+    <div class="card">
+        <h2>Tema</h2>
+        <div class="radio-group">
+            <div class="radio-item">
+                <input type="radio" id="themeSystem" name="theme" value="system" checked>
+                <label for="themeSystem">Sistem</label>
+            </div>
+            <div class="radio-item">
+                <input type="radio" id="themeDark" name="theme" value="dark">
+                <label for="themeDark">Karanlık</label>
+            </div>
+            <div class="radio-item">
+                <input type="radio" id="themeLight" name="theme" value="light">
+                <label for="themeLight">Aydınlık</label>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
     var ws;
     var reconnectInterval;
+
+    function setTheme(theme) {
+        if (theme === 'dark') {
+            document.body.classList.remove('light');
+            localStorage.setItem('theme', 'dark');
+        } else if (theme === 'light') {
+            document.body.classList.add('light');
+            localStorage.setItem('theme', 'light');
+        } else {
+            if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+                document.body.classList.add('light');
+            } else {
+                document.body.classList.remove('light');
+            }
+            localStorage.removeItem('theme');
+        }
+    }
+
+    function loadTheme() {
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            document.getElementById('theme' + savedTheme.charAt(0).toUpperCase() + savedTheme.slice(1)).checked = true;
+            setTheme(savedTheme);
+        } else {
+            document.getElementById('themeSystem').checked = true;
+            setTheme('system');
+        }
+    }
+
+    function handleMessage(data) {
+        try {
+            var doc = JSON.parse(data);
+            if (doc.tpd) document.getElementById('turnsPerDayValue').innerText = doc.tpd;
+            if (doc.duration) document.getElementById('turnDurationValue').innerText = doc.duration;
+            if (doc.tpd) document.getElementById('turnsPerDayInput').value = doc.tpd;
+            if (doc.duration) document.getElementById('turnDurationInput').value = doc.duration;
+            if (doc.direction) {
+                const radio = document.getElementById('direction' + doc.direction);
+                if (radio) radio.checked = true;
+            }
+            if (doc.customName) document.getElementById('nameInput').value = doc.customName;
+            if (doc.motorStatus) document.getElementById('motorStatus').innerText = doc.motorStatus;
+            if (doc.completedTurns) document.getElementById('completedTurns').innerText = doc.completedTurns;
+            if (doc.status) document.getElementById('motorStatus').innerText = doc.status;
+            if (doc.hourlyTurns) document.getElementById('hourlyTurns').innerText = doc.hourlyTurns;
+            if (doc.ip) document.getElementById('ipAddress').innerText = doc.ip;
+            if (doc.version) document.getElementById('currentVersion').innerText = doc.version;
+
+            if (doc.otaStatus) {
+                const msgBox = document.getElementById('message_box');
+                msgBox.innerText = doc.otaStatus;
+                msgBox.style.color = (doc.otaStatus.includes('Hata') || doc.otaStatus.includes('başarısız')) ? 'red' : 'green';
+                msgBox.style.display = 'block';
+                if (!doc.otaStatus.includes("indiriliyor")) {
+                    setTimeout(() => { msgBox.style.display = 'none'; }, 5000);
+                }
+            }
+        } catch(e) {
+            console.error("JSON ayrıştırma hatası:", e);
+        }
+    }
 
     function connectWebSocket() {
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -1120,38 +1313,6 @@ String htmlPage() {
             console.error('WebSocket hatası:', error);
             ws.close();
         };
-    }
-
-    function handleMessage(data) {
-        try {
-            var doc = JSON.parse(data);
-            if (doc.tpd) document.getElementById('turnsPerDayValue').innerText = doc.tpd;
-            if (doc.duration) document.getElementById('turnDurationValue').innerText = doc.duration;
-            if (doc.tpd) document.getElementById('turnsPerDayInput').value = doc.tpd;
-            if (doc.duration) document.getElementById('turnDurationInput').value = doc.duration;
-            if (doc.direction) {
-                const radio = document.getElementById('direction' + doc.direction);
-                if (radio) radio.checked = true;
-            }
-            if (doc.customName) document.getElementById('nameInput').value = doc.customName;
-            if (doc.motorStatus) document.getElementById('motorStatus').innerText = doc.motorStatus;
-            if (doc.completedTurns) document.getElementById('completedTurns').innerText = doc.completedTurns;
-            if (doc.status) document.getElementById('motorStatus').innerText = doc.status;
-            if (doc.hourlyTurns) document.getElementById('hourlyTurns').innerText = doc.hourlyTurns;
-            if (doc.ip) document.getElementById('ipAddress').innerText = doc.ip;
-
-            if (doc.otaStatus) {
-                const msgBox = document.getElementById('message_box');
-                msgBox.innerText = doc.otaStatus;
-                msgBox.style.color = (doc.otaStatus.includes('Hata') || doc.otaStatus.includes('başarısız')) ? 'red' : 'green';
-                msgBox.style.display = 'block';
-                if (!doc.otaStatus.includes("indiriliyor")) {
-                    setTimeout(() => { msgBox.style.display = 'none'; }, 5000);
-                }
-            }
-        } catch(e) {
-            console.error("JSON ayrıştırma hatası:", e);
-        }
     }
 
     function sendSettings(action) {
@@ -1231,8 +1392,15 @@ String htmlPage() {
             setTimeout(() => { msgBox.style.display = 'none'; }, 5000);
         }
     }
+    
+    document.querySelectorAll('input[name="theme"]').forEach(radio => {
+        radio.addEventListener('change', (event) => {
+            setTheme(event.target.value);
+        });
+    });
 
     window.onload = function() {
+        loadTheme();
         connectWebSocket();
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').then((reg) => {
