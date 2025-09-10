@@ -404,7 +404,7 @@ void setupMDNS() {
 
 void setupWebServer() {
   server.on("/", HTTP_GET, []() { server.send(200, "text/html", htmlPage()); });
-  server.on("/manifest.json", HTTP_GET, []() {
+    Server.on("/manifest.json", HTTP_GET, []() {
     String manifest = R"rawliteral(
 {
   "name": "Horus by Wyntro",
@@ -427,24 +427,9 @@ void setupWebServer() {
   ]
 }
 )rawliteral";
-      server.send(200, "text/plain", "Error: Maximum number of devices reached.");
-      return;
-    }
-    String mdns_name = server.arg("mdns_name");
-    if (mdns_name.length() > 0 && mdns_name.length() < 32) {
-      // Yalnızca MDNS adını kaydet
-      strncpy(otherHorusList[otherHorusCount], mdns_name.c_str(), 31);
-      otherHorusList[otherHorusCount][31] = '\0';
-      otherHorusCount++;
-      saveOtherHorusList();
-      server.send(200, "text/plain", "OK");
-    } else {
-      server.send(200, "text/plain", "Error: Invalid mDNS name.");
-    }
-});
-    )rawliteral";
     server.send(200, "application/json", manifest);
   });
+
   server.on("/sw.js", HTTP_GET, []() {
     String sw = R"rawliteral(
 self.addEventListener('install', (event) => {
