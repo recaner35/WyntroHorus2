@@ -132,7 +132,7 @@ void loop() {
 }
 
 String sanitizeString(String input) {
-  // 1. Adım: Türkçe karakterleri dönüştür
+  // Türkçe karakterleri dönüştür
   input.replace("ş", "s");
   input.replace("Ş", "S");
   input.replace("ç", "c");
@@ -151,7 +151,7 @@ String sanitizeString(String input) {
   String output = "";
   bool lastCharWasHyphen = false;
 
-  // 2. Adım: Sadece izin verilen karakterleri al, diğerlerini '-' yap
+  // Sadece izin verilen karakterleri al, diğerlerini '-' yap
   for (int i = 0; i < input.length(); i++) {
     char c = input.charAt(i);
     if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
@@ -166,22 +166,12 @@ String sanitizeString(String input) {
     }
   }
 
-  // 3. Adım: Baştaki ve sondaki '-' karakterlerini temizle
+  // Baştaki ve sondaki '-' karakterlerini temizle
   while (output.startsWith("-")) {
     output.remove(0, 1);
   }
   while (output.endsWith("-")) {
     output.remove(output.length() - 1);
-  }
-
-  return output;
-}
-
-  if (output.startsWith("-")) {
-    output.remove(0, 1);
-  }
-  if (output.endsWith("-")) {
-    output.remove(output.length() - 1, 1);
   }
 
   return output;
@@ -386,32 +376,33 @@ void writeWiFiSettings() {
 void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   readSettings(); 
-  
+ 
   byte mac[6];
   WiFi.macAddress(mac); // MAC adresini en başta bir kez oku
   char mac_suffix[5];
   sprintf(mac_suffix, "%02x%02x", mac[4], mac[5]); // Küçük harf için %x
 
-  // mDNS ismini oluştur
+  // mDNS ismini oluştur (Bu kısım sizin istediğiniz gibi kalıyor)
   if (strcmp(custom_name, "") != 0) {
     String sanitizedName = sanitizeString(String(custom_name));
     snprintf(mDNS_hostname, sizeof(mDNS_hostname), "%s-%s", sanitizedName.c_str(), mac_suffix);
   } else {
     snprintf(mDNS_hostname, sizeof(mDNS_hostname), "horus-%s", mac_suffix);
   }
-  
+ 
   if (strcmp(ssid, "") == 0) {
     Serial.println("setupWiFi: Invalid WiFi credentials, running in AP mode only.");
-    
+   
     char apSsid[32];
     snprintf(apSsid, sizeof(apSsid), "Horus-%s", mac_suffix);
-    
+   
     WiFi.softAP(apSsid, default_password);
     IPAddress apIP = WiFi.softAPIP();
     Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
-	dnsServer.start(53, "*", apIP); // <-- BU SATIR OLMALI
-    Serial.println("Captive Portal (DNS Server) started.");
-    
+
+    // --- YENİ EKLENEN SATIR (1) ---
+    dnsServer.start(53, "*", apIP); // Captive portal için DNS sunucusunu başlat
+   
   } else {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -422,10 +413,10 @@ void setupWiFi() {
       Serial.print(".");
       attempts++;
     }
-    
+   
     if (WiFi.status() == WL_CONNECTED) {
       Serial.printf("\nsetupWiFi: Connected to %s, IP: %s\n", ssid, WiFi.localIP().toString().c_str());
-      // mDNS ana bilgisayar adını ayarla.
+      // mDNS ana bilgisayar adını ayarla. (Bu kısım sizin istediğiniz gibi kalıyor)
       if (strcmp(custom_name, "") != 0) {
         String sanitizedName = sanitizeString(String(custom_name));
         strncpy(mDNS_hostname, sanitizedName.c_str(), sizeof(mDNS_hostname));
@@ -451,6 +442,9 @@ void setupWiFi() {
       IPAddress apIP = WiFi.softAPIP();
       Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
       
+      // --- YENİ EKLENEN SATIR (2) ---
+      dnsServer.start(53, "*", apIP); // Bağlantı başarısız olduğunda da DNS sunucusunu başlat
+
       // mDNS ana bilgisayar adını AP adına göre ayarla.
       sprintf(mDNS_hostname, "horus-%s", macStr + 8);
     }
@@ -648,18 +642,21 @@ void handleScan() {
 void handleSaveWiFi() {
   bool restartRequired = false;
 
+  // Sadece WiFi bilgileri gönderildiyse restart gerekir
   if (server.hasArg("ssid")) {
     strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
     strncpy(password, server.arg("password").c_str(), sizeof(password));
     restartRequired = true;
   }
 
+  // İsim her durumda güncellenebilir
   if (server.hasArg("name")) {
     String old_name = String(custom_name);
     String new_name = server.arg("name");
     
     strncpy(custom_name, new_name.c_str(), sizeof(custom_name));
 
+    // Eğer isim gerçekten değiştiyse mDNS'i yeniden başlat
     if (new_name != old_name) {
       String sanitizedName = sanitizeString(new_name);
       
@@ -681,7 +678,7 @@ void handleSaveWiFi() {
     }
   }
 
-  writeWiFiSettings();
+  writeWiFiSettings(); // Ayarları EEPROM'a yaz
   server.send(200, "text/plain", "OK");
 
   if (restartRequired) {
@@ -690,7 +687,7 @@ void handleSaveWiFi() {
     ESP.restart();
   } else {
     Serial.println("handleSaveWiFi: Device name updated. New mDNS: " + String(mDNS_hostname));
-    updateWebSocket();
+    updateWebSocket(); // Arayüzü yeni isimle güncelle
   }
 }
 
@@ -979,7 +976,7 @@ void updateWebSocket() {
   doc["direction"] = direction;
   doc["version"] = FIRMWARE_VERSION;
   doc["customName"] = custom_name; 
-  doc["mDNSHostname"] = mDNS_hostname; // Temizlenmiş mDNS adını ekle
+  doc["mDNSHostname"] = mDNS_hostname;
 
   if (WiFi.getMode() == WIFI_AP) {
     doc["ip"] = WiFi.softAPIP().toString();
