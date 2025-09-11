@@ -328,25 +328,28 @@ void writeWiFiSettings() {
 
 void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
-  readSettings(); // Ayarları buradan okuyun
+  readSettings(); 
   
   if (strcmp(ssid, "") == 0) {
     Serial.println("setupWiFi: Invalid WiFi credentials, running in AP mode only.");
+    
     byte mac[6];
-    WiFi.softAPmacAddress(mac);
+    // AP modu için doğru MAC adresini okuyan komut budur.
+    WiFi.softAPmacAddress(mac); 
+    
     char macStr[13];
     sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     
-    // AP adını MAC adresinin son 4 hanesine göre oluştur
     char apSsid[32];
+    // AP adını MAC adresinin son 4 hanesine göre oluştur.
     sprintf(apSsid, "Horus-%s", macStr + 8);
     
     WiFi.softAP(apSsid, default_password);
     IPAddress apIP = WiFi.softAPIP();
     Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
     
-    // mDNS ana bilgisayar adını AP adına göre ayarla
-    sprintf(mDNS_hostname, "horus-%s%s", macStr + 8);
+    // mDNS ana bilgisayar adını AP adına göre ayarla.
+    sprintf(mDNS_hostname, "horus-%s", macStr + 8);
 
   } else {
     WiFi.mode(WIFI_STA);
@@ -361,35 +364,34 @@ void setupWiFi() {
     
     if (WiFi.status() == WL_CONNECTED) {
       Serial.printf("\nsetupWiFi: Connected to %s, IP: %s\n", ssid, WiFi.localIP().toString().c_str());
-      
-      // mDNS ana bilgisayar adını ayarla
+      // mDNS ana bilgisayar adını ayarla.
       if (strcmp(custom_name, "") != 0) {
         strncpy(mDNS_hostname, custom_name, sizeof(mDNS_hostname) - 1);
         mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
       } else {
         byte mac[6];
-        WiFi.softAPmacAddress(mac);
+        WiFi.macAddress(mac); // STA modunda bu komut doğru çalışır.
         char macStr[13];
         sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-        sprintf(mDNS_hostname, "horus-%s%s", macStr + 8, macStr + 10);
+        sprintf(mDNS_hostname, "horus-%s", macStr + 8);
       }
       
     } else {
       Serial.println("\nsetupWiFi: Failed to connect, running in AP mode.");
-      // Eğer bağlantı başarısız olursa AP moduna dön
+      // Eğer bağlantı başarısız olursa AP moduna dön.
       WiFi.mode(WIFI_AP);
       byte mac[6];
-      WiFi.softAPmacAddress(mac);
+      WiFi.softAPmacAddress(mac); // AP modu için yine doğru komut kullanılıyor.
       char macStr[13];
       sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
       char apSsid[32];
-      sprintf(apSsid, "Horus-%s%s", macStr + 8, macStr + 10);
+      sprintf(apSsid, "Horus-%s", macStr + 8);
       WiFi.softAP(apSsid, default_password);
       IPAddress apIP = WiFi.softAPIP();
       Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
       
-      // mDNS ana bilgisayar adını AP adına göre ayarla
-      sprintf(mDNS_hostname, "horus-%s%s", macStr + 8, macStr + 10);
+      // mDNS ana bilgisayar adını AP adına göre ayarla.
+      sprintf(mDNS_hostname, "horus-%s", macStr + 8);
     }
   }
 }
