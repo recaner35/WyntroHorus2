@@ -95,30 +95,32 @@ String sanitizeString(String input);
 
 void setup() {
   Serial.begin(115200);
+  
   if (!LittleFS.begin(false)) {
     Serial.println("LittleFS mount failed, even after format!");
   } else {
     Serial.println("LittleFS mounted successfully!");
   }
+  // LittleFS.begin(); // Bu satır gereksizdi, kaldırıldı.
 
-  LittleFS.begin();
   readSettings();
   loadOtherHorusList(); // Cihaz listesini yükle
-  setupWiFi();
-  setupMDNS();
-  setupWebServer();
+  
   pinMode(IN1, OUTPUT);
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
   stopMotor();
-  readSettings();
+  
+  // Tekrar eden kod bloğu kaldırıldı.
+  // Her şey sadece bir kez çağrılacak.
   setupWiFi();
   setupMDNS();
   setupWebServer();
+  
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
-
+  
   xTaskCreate(runMotorTask, "MotorTask", 4096, NULL, 1, NULL);
 }
 
@@ -337,14 +339,14 @@ void setupWiFi() {
     
     // AP adını MAC adresinin son 4 hanesine göre oluştur
     char apSsid[32];
-    sprintf(apSsid, "Horus-%s%s", macStr + 8, macStr + 10);
+    sprintf(apSsid, "Horus-%s", macStr + 8);
     
     WiFi.softAP(apSsid, default_password);
     IPAddress apIP = WiFi.softAPIP();
     Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
     
     // mDNS ana bilgisayar adını AP adına göre ayarla
-    sprintf(mDNS_hostname, "horus-%s%s", macStr + 8, macStr + 10);
+    sprintf(mDNS_hostname, "horus-%s%s", macStr + 8);
 
   } else {
     WiFi.mode(WIFI_STA);
