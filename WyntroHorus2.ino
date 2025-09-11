@@ -1,5 +1,4 @@
 #include <WiFi.h>
-#include <esp_system.h>
 #include <WebServer.h>
 #include <LittleFS.h>
 #include <WebSocketsServer.h>
@@ -335,8 +334,8 @@ void setupWiFi() {
     Serial.println("setupWiFi: Invalid WiFi credentials, running in AP mode only.");
     
     byte mac[6];
-    // ÇÖZÜM: MAC adresini en güvenilir yerden, doğrudan donanımdan oku.
-    esp_efuse_mac_get_default(mac); 
+    // Standart ve her zaman çalışan WiFi MAC adresi okuma komutu.
+    WiFi.macAddress(mac); 
     
     char macStr[13];
     sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -371,7 +370,7 @@ void setupWiFi() {
         mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
       } else {
         byte mac[6];
-        esp_efuse_mac_get_default(mac); // Aynı şekilde, en güvenilir yerden oku.
+        WiFi.macAddress(mac);
         char macStr[13];
         sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
         sprintf(mDNS_hostname, "horus-%s", macStr + 8);
@@ -382,7 +381,7 @@ void setupWiFi() {
       // Eğer bağlantı başarısız olursa AP moduna dön.
       WiFi.mode(WIFI_AP);
       byte mac[6];
-      esp_efuse_mac_get_default(mac); // Aynı şekilde, en güvenilir yerden oku.
+      WiFi.macAddress(mac);
       char macStr[13];
       sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
       char apSsid[32];
