@@ -9,6 +9,7 @@
 #include <Update.h>
 #include <vector> // Cihaz listesi için
 #include <ESPmDNS.h>
+#include <DNSServer.h>
 
 // mDNS nesnesini tanımla
 MDNSResponder mDNS;
@@ -20,7 +21,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.63";
+const char* FIRMWARE_VERSION = "v1.0.64";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -65,6 +66,7 @@ const int steps[8][4] = {
 WebServer server(80);
 WebSocketsServer webSocket(81);
 TaskHandle_t motorTaskHandle = NULL;
+DNSServer dnsServer;
 
 // Function prototypes
 void readSettings();
@@ -125,9 +127,57 @@ void setup() {
 }
 
 void loop() {
+  dnsServer.processNextRequest();
   server.handleClient();
   webSocket.loop();
   checkHourlyReset();
+}
+
+String sanitizeString(String input) {
+  input.toLowerCase();
+  String output = "";
+  bool lastCharWasHyphen = false;
+
+  for (char& c : input) {
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+      output += c;
+      lastCharWasHyphen = false;
+    } else if (c == ' ') {
+      if (!lastCharWasHyphen) {
+        output += '-';
+        lastCharWasHyphen = true;
+      }
+    } else {
+      // Türkçe karakterleri ve diğerlerini dönüştür
+      String replacement = "-";
+      if (c == 'ç') replacement = "c";
+      else if (c == 'ş') replacement = "s";
+      else if (c == 'ğ') replacement = "g";
+      else if (c == 'ı') replacement = "i";
+      else if (c == 'ö') replacement = "o";
+      else if (c == 'ü') replacement = "u";
+
+      if (replacement == "-") {
+        if (!lastCharWasHyphen) {
+          output += '-';
+          lastCharWasHyphen = true;
+        }
+      } else {
+        output += replacement;
+        lastCharWasHyphen = false;
+      }
+    }
+  }
+
+  // Baştaki ve sondaki '-' karakterlerini temizle
+  if (output.startsWith("-")) {
+    output.remove(0, 1);
+  }
+  if (output.endsWith("-")) {
+    output.remove(output.length() - 1, 1);
+  }
+
+  return output;
 }
 
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
@@ -351,6 +401,9 @@ void setupWiFi() {
     // mDNS ana bilgisayar adını AP adına göre ayarla.
     sprintf(mDNS_hostname, "horus-%s", macStr + 8);
 
+	dnsServer.start(53, "*", apIP); 
+    Serial.println("Captive Portal (DNS Server) started.");
+
   } else {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -366,8 +419,8 @@ void setupWiFi() {
       Serial.printf("\nsetupWiFi: Connected to %s, IP: %s\n", ssid, WiFi.localIP().toString().c_str());
       // mDNS ana bilgisayar adını ayarla.
       if (strcmp(custom_name, "") != 0) {
-        strncpy(mDNS_hostname, custom_name, sizeof(mDNS_hostname) - 1);
-        mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
+        String sanitizedName = sanitizeString(String(custom_name));
+        strncpy(mDNS_hostname, sanitizedName.c_str(), sizeof(mDNS_hostname));
       } else {
         byte mac[6];
         WiFi.macAddress(mac);
@@ -517,7 +570,23 @@ self.addEventListener('fetch', (event) => {
   
   server.on("/manual_update", HTTP_GET, []() { server.send(200, "text/html", manualUpdatePage()); });
   server.on("/manual_update", HTTP_POST, []() { server.client().setTimeout(30000); }, handleManualUpdate);
-  
+
+  server.onNotFound([]() {
+    String host = server.hostHeader();
+    String mDNS_host_with_local = String(mDNS_hostname) + ".local";
+    
+    // Eğer istek IP adresimize veya mDNS ismimize gelmiyorsa yönlendir.
+    if (host != WiFi.softAPIP().toString() && host != mDNS_host_with_local) {
+      String redirectUrl = "http://" + mDNS_host_with_local;
+      server.sendHeader("Location", redirectUrl, true);
+      server.send(302, "text/plain", "");
+      Serial.println("Redirecting to " + redirectUrl);
+    } else {
+      // Normalde ana sayfayı gönder
+      server.send(200, "text/html", htmlPage());
+    }
+  });
+
   server.begin();
   Serial.println("setupWebServer: Web server started.");
   Serial.println("setupWebServer: Web socket server started.");
@@ -569,19 +638,50 @@ void handleScan() {
 }
 
 void handleSaveWiFi() {
-  String old_name = String(custom_name);
-  if (server.hasArg("ssid")) strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
-  if (server.hasArg("password")) strncpy(password, server.arg("password").c_str(), sizeof(password));
-  if (server.hasArg("name")) strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name));
-  writeWiFiSettings();
-  if (String(custom_name) != old_name) {
-    MDNS.end();
-    setupMDNS();
+  bool restartRequired = false;
+
+  // Sadece WiFi bilgileri gönderildiyse restart gerekir
+  if (server.hasArg("ssid")) {
+    strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
+    strncpy(password, server.arg("password").c_str(), sizeof(password));
+    restartRequired = true;
   }
+
+  // İsim her durumda güncellenebilir
+  if (server.hasArg("name")) {
+    String old_name = String(custom_name);
+    String new_name = server.arg("name");
+    
+    strncpy(custom_name, new_name.c_str(), sizeof(custom_name));
+
+    // Eğer isim gerçekten değiştiyse mDNS'i yeniden başlat
+    if (new_name != old_name) {
+      String sanitizedName = sanitizeString(new_name);
+      if (sanitizedName.length() == 0) { // Eğer isim tamamen geçersiz karakterlerden oluşuyorsa MAC'in sonunu ekle
+          byte mac[6];
+          WiFi.macAddress(mac);
+          char mac_suffix[5];
+          sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
+          sanitizedName = "horus-" + String(mac_suffix).toLowerCase();
+      }
+      strncpy(mDNS_hostname, sanitizedName.c_str(), sizeof(mDNS_hostname));
+      
+      MDNS.end();
+      setupMDNS();
+    }
+  }
+
+  writeWiFiSettings(); // Ayarları EEPROM'a yaz
   server.send(200, "text/plain", "OK");
-  Serial.println("handleSaveWiFi: WiFi settings saved, restarting...");
-  delay(1000);
-  ESP.restart();
+
+  if (restartRequired) {
+    Serial.println("handleSaveWiFi: WiFi settings saved, restarting...");
+    delay(1000);
+    ESP.restart();
+  } else {
+    Serial.println("handleSaveWiFi: Device name updated.");
+    updateWebSocket(); // Arayüzü yeni isimle güncelle
+  }
 }
 
 void handleStatus() {
