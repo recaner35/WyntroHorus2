@@ -658,12 +658,17 @@ void handleSaveWiFi() {
     if (new_name != old_name) {
       String sanitizedName = sanitizeString(new_name);
       if (sanitizedName.length() == 0) { // Eğer isim tamamen geçersiz karakterlerden oluşuyorsa MAC'in sonunu ekle
-          byte mac[6];
-          WiFi.macAddress(mac);
-          char mac_suffix[5];
-          sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
-          sanitizedName = "horus-" + String(mac_suffix).toLowerCase();
-      }
+        byte mac[6];
+        WiFi.macAddress(mac);
+        char mac_suffix[5];
+        sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
+
+        // --- DÜZELTİLMİŞ KISIM ---
+        String mac_string = String(mac_suffix); // 1. Önce String'i oluştur
+        mac_string.toLowerCase();              // 2. Sonra küçük harfe çevir
+        sanitizedName = "horus-" + mac_string; // 3. En son birleştir
+        // --- DÜZELTİLMİŞ KISIM SONU ---
+    }
       strncpy(mDNS_hostname, sanitizedName.c_str(), sizeof(mDNS_hostname));
       
       MDNS.end();
