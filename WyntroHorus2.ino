@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <esp_system.h>
 #include <WebServer.h>
 #include <LittleFS.h>
 #include <WebSocketsServer.h>
