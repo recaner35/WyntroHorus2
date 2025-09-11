@@ -867,10 +867,16 @@ void updateWebSocket() {
   doc["tpd"] = turnsPerDay;
   doc["duration"] = turnDuration;
   doc["direction"] = direction;
-  doc["ip"] = WiFi.localIP().toString();
   doc["version"] = FIRMWARE_VERSION;
 
-  // Diğer Horus cihazlarının listesini ekle
+  doc["customName"] = custom_name; // Cihaz Adını JSON'a ekle
+
+  if (WiFi.getMode() == WIFI_AP) {
+    doc["ip"] = WiFi.softAPIP().toString();
+  } else {
+    doc["ip"] = WiFi.localIP().toString();
+  }
+
   JsonArray otherHorus = doc.createNestedArray("otherHorus");
   for (int i = 0; i < otherHorusCount; i++) {
     otherHorus.add(otherHorusList[i]);
@@ -1339,22 +1345,32 @@ String htmlPage() {
     function handleMessage(data) {
         try {
             var doc = JSON.parse(data);
-            if (doc.tpd) document.getElementById('turnsPerDayValue').innerText = doc.tpd;
-            if (doc.duration) document.getElementById('turnDurationValue').innerText = doc.duration;
-            if (doc.tpd) document.getElementById('turnsPerDayInput').value = doc.tpd;
-            if (doc.duration) document.getElementById('turnDurationInput').value = doc.duration;
+            if (doc.tpd) {
+                // Hem durum kutusunu hem de ayar slider'ını güncelle
+                document.getElementById('turnsPerDay').innerText = doc.tpd; 
+                document.getElementById('turnsPerDayValue').innerText = doc.tpd;
+                document.getElementById('turnsPerDayInput').value = doc.tpd;
+            }
+            if (doc.duration) {
+                document.getElementById('turnDuration').innerText = doc.duration + ' s';
+                document.getElementById('turnDurationValue').innerText = doc.duration;
+                document.getElementById('turnDurationInput').value = doc.duration;
+            }
             if (doc.direction) {
                 const radio = document.getElementById('direction' + doc.direction);
                 if (radio) radio.checked = true;
             }
-            if (doc.customName) document.getElementById('nameInput').value = doc.customName;
+            if (doc.customName) {
+                document.getElementById('nameInput').value = doc.customName;
+                document.getElementById('deviceName').innerText = doc.customName ? doc.customName : "İsimsiz";
+            }
             if (doc.motorStatus) document.getElementById('motorStatus').innerText = doc.motorStatus;
             if (doc.completedTurns) document.getElementById('completedTurns').innerText = doc.completedTurns;
             if (doc.status) document.getElementById('motorStatus').innerText = doc.status;
             if (doc.hourlyTurns) document.getElementById('hourlyTurns').innerText = doc.hourlyTurns;
             if (doc.ip) document.getElementById('ipAddress').innerText = doc.ip;
             if (doc.version) document.getElementById('currentVersion').innerText = doc.version;
-            if (doc.customName) document.getElementById('deviceName').innerText = doc.customName;
+
             if (doc.otaStatus) {
                 const msgBox = document.getElementById('message_box');
                 msgBox.innerText = doc.otaStatus;
@@ -1364,9 +1380,11 @@ String htmlPage() {
                     setTimeout(() => { msgBox.style.display = 'none'; }, 5000);
                 }
             }
+            
             if (doc.otherHorus) {
                 renderOtherHorusList(doc.otherHorus);
             }
+
         } catch(e) {
             console.error("JSON ayrıştırma hatası:", e);
         }
