@@ -20,7 +20,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.60";
+const char* FIRMWARE_VERSION = "v1.0.61";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -600,15 +600,6 @@ void handleStatus() {
 void handleManualUpdate() {
   StaticJsonDocument<256> statusDoc;
   String json;
-
-  if (!server.hasArg("firmware")) {
-    statusDoc["otaStatus"] = "Hata: Dosya seçilmedi.";
-    serializeJson(statusDoc, json);
-    webSocket.broadcastTXT(json);
-    server.send(400, "text/plain", "No file uploaded.");
-    Serial.println("handleManualUpdate: No file uploaded.");
-    return;
-  }
 
   HTTPUpload& upload = server.upload();
   if (upload.status == UPLOAD_FILE_START) {
