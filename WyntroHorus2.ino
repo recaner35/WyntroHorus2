@@ -519,7 +519,6 @@ self.addEventListener('fetch', (event) => {
   Serial.println("setupWebServer: Web socket server started.");
 }
 
-
 void handleSet() {
   if (server.hasArg("tpd")) turnsPerDay = server.arg("tpd").toInt();
   if (server.hasArg("duration")) turnDuration = server.arg("duration").toFloat();
