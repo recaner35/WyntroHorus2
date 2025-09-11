@@ -1592,7 +1592,7 @@ String htmlPage() {
   return page;
 }
 String manualUpdatePage() {
-  String page = R"MANUAL_UPDATE_PAGE(
+  String page = R"UPDATE_PAGE(
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -1727,6 +1727,6 @@ String manualUpdatePage() {
     </script>
 </body>
 </html>
-)MANUAL_UPDATE_PAGE";
+)UPDATE_PAGE";
   return page;
 }
