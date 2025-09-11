@@ -21,7 +21,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.64";
+const char* FIRMWARE_VERSION = "v1.0.65";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -113,9 +113,6 @@ void setup() {
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
   stopMotor();
-  
-  // Tekrar eden kod bloğu kaldırıldı.
-  // Her şey sadece bir kez çağrılacak.
   setupWiFi();
   setupMDNS();
   setupWebServer();
@@ -134,38 +131,50 @@ void loop() {
 }
 
 String sanitizeString(String input) {
+  // 1. Adım: Türkçe karakterleri dönüştür
+  input.replace("ş", "s");
+  input.replace("Ş", "S");
+  input.replace("ç", "c");
+  input.replace("Ç", "C");
+  input.replace("ğ", "g");
+  input.replace("Ğ", "G");
+  input.replace("ı", "i");
+  input.replace("İ", "I");
+  input.replace("ö", "o");
+  input.replace("Ö", "O");
+  input.replace("ü", "u");
+  input.replace("Ü", "U");
+
   input.toLowerCase();
+
   String output = "";
   bool lastCharWasHyphen = false;
 
-  for (char& c : input) {
+  // 2. Adım: Sadece izin verilen karakterleri al, diğerlerini '-' yap
+  for (int i = 0; i < input.length(); i++) {
+    char c = input.charAt(i);
     if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
       output += c;
       lastCharWasHyphen = false;
-    } else if (c == ' ') {
+    } else {
+      // Birden fazla '-' yan yana gelmesini engelle
       if (!lastCharWasHyphen) {
         output += '-';
         lastCharWasHyphen = true;
       }
-    } else {
-      // Türkçe karakterleri ve diğerlerini dönüştür
-      String replacement = "-";
-      if (c == 'ç') replacement = "c";
-      else if (c == 'ş') replacement = "s";
-      else if (c == 'ğ') replacement = "g";
-      else if (c == 'ı') replacement = "i";
-      else if (c == 'ö') replacement = "o";
-      else if (c == 'ü') replacement = "u";
+    }
+  }
 
-      if (replacement == "-") {
-        if (!lastCharWasHyphen) {
-          output += '-';
-          lastCharWasHyphen = true;
-        }
-      } else {
-        output += replacement;
-        lastCharWasHyphen = false;
-      }
+  // 3. Adım: Baştaki ve sondaki '-' karakterlerini temizle
+  while (output.startsWith("-")) {
+    output.remove(0, 1);
+  }
+  while (output.endsWith("-")) {
+    output.remove(output.length() - 1);
+  }
+
+  return output;
+}
     }
   }
 
@@ -380,30 +389,31 @@ void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   readSettings(); 
   
+  byte mac[6];
+  WiFi.macAddress(mac); // MAC adresini en başta bir kez oku
+  char mac_suffix[5];
+  sprintf(mac_suffix, "%02x%02x", mac[4], mac[5]); // Küçük harf için %x
+
+  // mDNS ismini oluştur
+  if (strcmp(custom_name, "") != 0) {
+    String sanitizedName = sanitizeString(String(custom_name));
+    snprintf(mDNS_hostname, sizeof(mDNS_hostname), "%s-%s", sanitizedName.c_str(), mac_suffix);
+  } else {
+    snprintf(mDNS_hostname, sizeof(mDNS_hostname), "horus-%s", mac_suffix);
+  }
+  
   if (strcmp(ssid, "") == 0) {
     Serial.println("setupWiFi: Invalid WiFi credentials, running in AP mode only.");
     
-    byte mac[6];
-    // Standart ve her zaman çalışan WiFi MAC adresi okuma komutu.
-    WiFi.macAddress(mac); 
-    
-    char macStr[13];
-    sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    
     char apSsid[32];
-    // AP adını MAC adresinin son 4 hanesine göre oluştur.
-    sprintf(apSsid, "Horus-%s", macStr + 8);
+    snprintf(apSsid, sizeof(apSsid), "Horus-%s", mac_suffix);
     
     WiFi.softAP(apSsid, default_password);
     IPAddress apIP = WiFi.softAPIP();
     Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
-    
-    // mDNS ana bilgisayar adını AP adına göre ayarla.
-    sprintf(mDNS_hostname, "horus-%s", macStr + 8);
-
-	dnsServer.start(53, "*", apIP); 
+	dnsServer.start(53, "*", apIP); // <-- BU SATIR OLMALI
     Serial.println("Captive Portal (DNS Server) started.");
-
+    
   } else {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -640,43 +650,40 @@ void handleScan() {
 void handleSaveWiFi() {
   bool restartRequired = false;
 
-  // Sadece WiFi bilgileri gönderildiyse restart gerekir
   if (server.hasArg("ssid")) {
     strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
     strncpy(password, server.arg("password").c_str(), sizeof(password));
     restartRequired = true;
   }
 
-  // İsim her durumda güncellenebilir
   if (server.hasArg("name")) {
     String old_name = String(custom_name);
     String new_name = server.arg("name");
     
     strncpy(custom_name, new_name.c_str(), sizeof(custom_name));
 
-    // Eğer isim gerçekten değiştiyse mDNS'i yeniden başlat
     if (new_name != old_name) {
       String sanitizedName = sanitizeString(new_name);
-      if (sanitizedName.length() == 0) { // Eğer isim tamamen geçersiz karakterlerden oluşuyorsa MAC'in sonunu ekle
-        byte mac[6];
-        WiFi.macAddress(mac);
-        char mac_suffix[5];
-        sprintf(mac_suffix, "%02X%02X", mac[4], mac[5]);
+      
+      byte mac[6];
+      WiFi.macAddress(mac);
+      char mac_suffix[5];
+      sprintf(mac_suffix, "%02x%02x", mac[4], mac[5]); // Küçük harf için %x
 
-        // --- DÜZELTİLMİŞ KISIM ---
-        String mac_string = String(mac_suffix); // 1. Önce String'i oluştur
-        mac_string.toLowerCase();              // 2. Sonra küçük harfe çevir
-        sanitizedName = "horus-" + mac_string; // 3. En son birleştir
-        // --- DÜZELTİLMİŞ KISIM SONU ---
-    }
-      strncpy(mDNS_hostname, sanitizedName.c_str(), sizeof(mDNS_hostname));
+      if (sanitizedName.length() > 0) {
+        // Eğer bir isim girildiyse, ismin sonuna MAC ekle
+        snprintf(mDNS_hostname, sizeof(mDNS_hostname), "%s-%s", sanitizedName.c_str(), mac_suffix);
+      } else {
+        // Eğer isim boş ise, standart ismi kullan
+        snprintf(mDNS_hostname, sizeof(mDNS_hostname), "horus-%s", mac_suffix);
+      }
       
       MDNS.end();
       setupMDNS();
     }
   }
 
-  writeWiFiSettings(); // Ayarları EEPROM'a yaz
+  writeWiFiSettings();
   server.send(200, "text/plain", "OK");
 
   if (restartRequired) {
@@ -684,8 +691,8 @@ void handleSaveWiFi() {
     delay(1000);
     ESP.restart();
   } else {
-    Serial.println("handleSaveWiFi: Device name updated.");
-    updateWebSocket(); // Arayüzü yeni isimle güncelle
+    Serial.println("handleSaveWiFi: Device name updated. New mDNS: " + String(mDNS_hostname));
+    updateWebSocket();
   }
 }
 
@@ -973,8 +980,8 @@ void updateWebSocket() {
   doc["duration"] = turnDuration;
   doc["direction"] = direction;
   doc["version"] = FIRMWARE_VERSION;
-
-  doc["customName"] = custom_name; // Cihaz Adını JSON'a ekle
+  doc["customName"] = custom_name; 
+  doc["mDNSHostname"] = mDNS_hostname; // Temizlenmiş mDNS adını ekle
 
   if (WiFi.getMode() == WIFI_AP) {
     doc["ip"] = WiFi.softAPIP().toString();
@@ -999,7 +1006,7 @@ String htmlPage() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Horus</title>
+    <title>Horus by Wyntro</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icon-192x192.png">
@@ -1033,8 +1040,9 @@ String htmlPage() {
             margin: 0;
             padding: 20px;
             display: flex;
+            flex-direction: column; /* <-- Dikey hizalama için değiştirildi */
             justify-content: center;
-            align-items: flex-start;
+            align-items: center; /* <-- Yatayda ortalamak için eklendi */
             min-height: 100vh;
         }
         .container {
@@ -1270,6 +1278,12 @@ String htmlPage() {
     .logo-svg path {
         fill: currentColor;
     }
+    .footer-text {
+        text-align: center;
+        margin-top: 20px;
+        font-size: 0.8em; /* Yazıyı küçültür */
+        color: var(--border-color); /* Temaya uygun, soluk bir renk kullanır */
+    }
     </style>
 </head>
 <body>
@@ -1447,11 +1461,10 @@ String htmlPage() {
         document.getElementById(tabId + 'Tab').classList.add('active');
         document.getElementById('tab-' + tabId).classList.add('active');
     }
-    function handleMessage(data) {
+function handleMessage(data) {
         try {
             var doc = JSON.parse(data);
             if (doc.tpd) {
-                // Hem durum kutusunu hem de ayar slider'ını güncelle
                 document.getElementById('turnsPerDay').innerText = doc.tpd; 
                 document.getElementById('turnsPerDayValue').innerText = doc.tpd;
                 document.getElementById('turnsPerDayInput').value = doc.tpd;
@@ -1465,15 +1478,28 @@ String htmlPage() {
                 const radio = document.getElementById('direction' + doc.direction);
                 if (radio) radio.checked = true;
             }
-            if (doc.customName) {
-                document.getElementById('nameInput').value = doc.customName;
-                document.getElementById('deviceName').innerText = doc.customName ? doc.customName : "İsimsiz";
+
+            // Cihaz Adı ve Input Kutusu Mantığı
+            const deviceNameEl = document.getElementById('deviceName');
+            const nameInputEl = document.getElementById('nameInput');
+            if (doc.customName && doc.customName.length > 0) {
+                deviceNameEl.innerText = doc.customName;
+                nameInputEl.value = doc.customName;
+                nameInputEl.placeholder = '';
+            } else {
+                deviceNameEl.innerText = doc.mDNSHostname; // İsim yoksa mDNS adını göster
+                nameInputEl.value = '';
+                nameInputEl.placeholder = doc.mDNSHostname; // Input kutusunda placeholder olarak göster
             }
+            
+            // Web Arayüzü Mantığı
+            if (doc.ip && doc.mDNSHostname) {
+                const ipAddressEl = document.getElementById('ipAddress');
+                ipAddressEl.innerHTML = doc.ip + '<br><small style="font-size: 0.8em;">' + doc.mDNSHostname + '.local</small>';
+            }
+
             if (doc.motorStatus) document.getElementById('motorStatus').innerText = doc.motorStatus;
             if (doc.completedTurns) document.getElementById('completedTurns').innerText = doc.completedTurns;
-            if (doc.status) document.getElementById('motorStatus').innerText = doc.status;
-            if (doc.hourlyTurns) document.getElementById('hourlyTurns').innerText = doc.hourlyTurns;
-            if (doc.ip) document.getElementById('ipAddress').innerText = doc.ip;
             if (doc.version) document.getElementById('currentVersion').innerText = doc.version;
 
             if (doc.otaStatus) {
@@ -1703,7 +1729,8 @@ String htmlPage() {
     installButton.style.display = 'none';
     });
 </script>
-<button id="pwa_install_button" class="btn primary" style="display:none;">Uygulamayı Yükle</button>
+<button id="pwa_install_button" class="btn primary" ">Uygulamayı Yükle</button>
+<p class="footer-text">Caner Kocacık tarafından tasarlanmıştır.</p>
 </body>
 </html>
 )MAIN_HTML_PAGE";
