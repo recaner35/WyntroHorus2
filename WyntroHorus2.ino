@@ -20,7 +20,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.61";
+const char* FIRMWARE_VERSION = "v1.0.62";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -333,7 +333,7 @@ void setupWiFi() {
   if (strcmp(ssid, "") == 0) {
     Serial.println("setupWiFi: Invalid WiFi credentials, running in AP mode only.");
     byte mac[6];
-    WiFi.macAddress(mac);
+    WiFi.softAPmacAddress(mac);
     char macStr[13];
     sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     
@@ -368,7 +368,7 @@ void setupWiFi() {
         mDNS_hostname[sizeof(mDNS_hostname) - 1] = '\0';
       } else {
         byte mac[6];
-        WiFi.macAddress(mac);
+        WiFi.softAPmacAddress(mac);
         char macStr[13];
         sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
         sprintf(mDNS_hostname, "horus-%s%s", macStr + 8, macStr + 10);
@@ -379,7 +379,7 @@ void setupWiFi() {
       // Eğer bağlantı başarısız olursa AP moduna dön
       WiFi.mode(WIFI_AP);
       byte mac[6];
-      WiFi.macAddress(mac);
+      WiFi.softAPmacAddress(mac);
       char macStr[13];
       sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
       char apSsid[32];
