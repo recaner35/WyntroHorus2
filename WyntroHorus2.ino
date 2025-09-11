@@ -70,6 +70,7 @@ DNSServer dnsServer;
 
 // Function prototypes
 void readSettings();
+void loadOtherHorusList();
 void writeMotorSettings();
 void writeWiFiSettings();
 void setupWiFi();
@@ -163,7 +164,7 @@ String sanitizeString(String input) {
         lastCharWasHyphen = true;
       }
     }
-  }
+  } // <-- Hatalı olan fazladan parantez buradan kaldırıldı.
 
   // 3. Adım: Baştaki ve sondaki '-' karakterlerini temizle
   while (output.startsWith("-")) {
@@ -175,10 +176,7 @@ String sanitizeString(String input) {
 
   return output;
 }
-    }
-  }
 
-  // Baştaki ve sondaki '-' karakterlerini temizle
   if (output.startsWith("-")) {
     output.remove(0, 1);
   }
