@@ -22,7 +22,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.66";
+const char* FIRMWARE_VERSION = "v1.0.67";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -988,6 +988,16 @@ String htmlPage() {
         <meta name="apple-mobile-web-app-capable" content="yes">
         <link rel="manifest" href="/manifest.json">
         <link rel="apple-touch-icon" href="/icon-192x192.png">
+        <!-- Service Worker'ı register et -->
+        <script>
+        if ('serviceWorker' in navigator) {
+        	window.addEventListener('load', () => {
+        		navigator.serviceWorker.register('/sw.js')
+          			.then(reg => console.log('SW registered: ', reg))
+          			.catch(err => console.log('SW registration failed: ', err));
+        	});
+        }
+        </script>
         <style>
         :root {
             --bg-color: #111827;
