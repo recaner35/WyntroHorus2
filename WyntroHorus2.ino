@@ -459,68 +459,69 @@ void setupMDNS() {
 }
 
 void setupWebServer() {
-  server.on("/", HTTP_GET, []() { server.send(200, "text/html", htmlPage()); });
-  
   server.on("/manifest.json", HTTP_GET, []() {
     String manifest = R"JSON_CONTENT(
-{
-  "name": "Horus by Wyntro",
-  "short_name": "Horus",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#111827",
-  "theme_color": "#3b82f6",
-  "icons": [
-    {
-      "src": "/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
-}
-)JSON_CONTENT";
+  {
+    "name": "Horus by Wyntro",
+    "short_name": "Horus",
+    "description": "Horus motor kontrol uygulaması",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#111827",
+    "theme_color": "#3b82f6",
+    "scope": "/",
+    "icons": [
+      {
+        "src": "/icon-192x192.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "any"
+      },
+      {
+        "src": "/icon-512x512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "any maskable"
+      }
+    ],
+    "screenshots": [
+      {
+        "src": "/screenshot1.png",
+        "sizes": "1280x720",
+        "type": "image/png",
+        "form_factor": "wide"
+      }
+    ]
+  }
+  )JSON_CONTENT";
     server.send(200, "application/json", manifest);
   });
 
   server.on("/sw.js", HTTP_GET, []() {
     String sw = R"SW_SCRIPT(
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open('horus-v1').then((cache) => {
-      return cache.addAll([
-        '/',
-        '/manifest.json',
-        '/icon-192x192.png',
-        '/icon-512x512.png'
-      ]);
-    })
-  );
-});
+  const CACHE_NAME = 'horus-v1';
+  const urlsToCache = [
+    '/',
+    '/manifest.json',
+    '/icon-192x192.png',
+    '/icon-512x512.png'
+  ];
 
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    })
-  );
-});
-    )SW_SCRIPT";
-    server.send(200, "application/javascript", sw);
+  self.addEventListener('install', (event) => {
+    event.waitUntil(
+      caches.open(CACHE_NAME)
+        .then((cache) => cache.addAll(urlsToCache))
+    );
   });
 
-  server.on("/icon-192x192.png", HTTP_GET, []() {
-    File file = LittleFS.open("/icon-192x192.png", "r");
-    if (!file) {
-      server.send(404, "text/plain", "Icon not found");
-      return;
-    }
-    server.streamFile(file, "image/png");
-    file.close();
+  self.addEventListener('fetch', (event) => {
+    event.respondWith(
+      caches.match(event.request)
+        .then((response) => response || fetch(event.request))
+    );
+  });
+    )SW_SCRIPT";
+    server.send(200, "application/javascript", sw);
   });
 
   server.on("/icon-512x512.png", HTTP_GET, []() {
