@@ -465,7 +465,7 @@ void setupWebServer() {
   server.on("/", HTTP_GET, []() { server.send(200, "text/html", htmlPage()); });
   
   server.on("/manifest.json", HTTP_GET, []() {
-    String manifest = R"JSON_MANIFEST(
+    String manifest = R"JSON_CONTENT(
 {
   "name": "Horus by Wyntro",
   "short_name": "Horus",
@@ -486,12 +486,12 @@ void setupWebServer() {
     }
   ]
 }
-)JSON_MANIFEST";
+)JSON_CONTENT";
     server.send(200, "application/json", manifest);
   });
 
   server.on("/sw.js", HTTP_GET, []() {
-    String sw = R"SERVICE_WORKER(
+    String sw = R"SW_SCRIPT(
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open('horus-v1').then((cache) => {
@@ -512,7 +512,7 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
-    )SERVICE_WORKER";
+    )SW_SCRIPT";
     server.send(200, "application/javascript", sw);
   });
 
@@ -572,21 +572,9 @@ self.addEventListener('fetch', (event) => {
   
   server.on("/manual_update", HTTP_GET, []() { server.send(200, "text/html", manualUpdatePage()); });
   server.on("/manual_update", HTTP_POST, []() { server.client().setTimeout(30000); }, handleManualUpdate);
-
+  
   server.onNotFound([]() {
-    String host = server.hostHeader();
-    String mDNS_host_with_local = String(mDNS_hostname) + ".local";
-    
-    // Eğer istek IP adresimize veya mDNS ismimize gelmiyorsa yönlendir.
-    if (host != WiFi.softAPIP().toString() && host != mDNS_host_with_local) {
-      String redirectUrl = "http://" + mDNS_host_with_local;
-      server.sendHeader("Location", redirectUrl, true);
-      server.send(302, "text/plain", "");
-      Serial.println("Redirecting to " + redirectUrl);
-    } else {
-      // Normalde ana sayfayı gönder
-      server.send(200, "text/html", htmlPage());
-    }
+    server.send(200, "text/html", htmlPage());
   });
 
   server.begin();
@@ -995,17 +983,17 @@ void updateWebSocket() {
 }
 
 String htmlPage() {
-  String page = R"MAIN_HTML_PAGE(
+  String page = R"PAGE_HTML(
     <!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Horus by Wyntro</title>
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/icon-192x192.png">
-    <style>
+    <html lang="tr">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <title>Horus</title>
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="manifest" href="/manifest.json">
+        <link rel="apple-touch-icon" href="/icon-192x192.png">
+        <style>
         :root {
             --bg-color: #111827;
             --text-color: #f9fafb;
@@ -1724,15 +1712,18 @@ function handleMessage(data) {
     installButton.style.display = 'none';
     });
 </script>
-<button id="pwa_install_button" class="btn primary" ">Uygulamayı Yükle</button>
-<p class="footer-text">Caner Kocacık tarafından tasarlanmıştır.</p>
-</body>
-</html>
-)MAIN_HTML_PAGE";
+    
+    <p class="footer-text">Caner Kocacık tarafından tasarlanmıştır.</p>
+    <button id="pwa_install_button" class="btn primary" style="display:none;">Uygulamayı Yükle</button>
+    
+    </body>
+    </html>
+)PAGE_HTML";
   return page;
 }
+
 String manualUpdatePage() {
-  String page = R"UPDATE_PAGE(
+  String page = R"UPDATE_HTML(
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -1759,22 +1750,10 @@ String manualUpdatePage() {
             border: 1px solid transparent;
             border-radius: 5px;
         }
-        .success {
-            color: green;
-            border-color: green;
-        }
-        .error {
-            color: red;
-            border-color: red;
-        }
-        input[type="file"] {
-            margin-top: 10px;
-        }
-        button {
-            margin-top: 10px;
-            padding: 10px 20px;
-            cursor: pointer;
-        }
+        .success { color: green; border-color: green; }
+        .error { color: red; border-color: red; }
+        input[type="file"] { margin-top: 10px; }
+        button { margin-top: 10px; padding: 10px 20px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -1792,9 +1771,7 @@ String manualUpdatePage() {
         var reconnectInterval;
         
         function connectWebSocket() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                return;
-            }
+            if (ws && ws.readyState === WebSocket.OPEN) return;
             ws = new WebSocket('ws://' + window.location.hostname + ':81/');
             ws.onopen = function() {
                 console.log('WebSocket bağlantısı açıldı.');
@@ -1822,11 +1799,8 @@ String manualUpdatePage() {
                     const msgBox = document.getElementById('message_box');
                     msgBox.innerText = doc.otaStatus;
                     msgBox.className = (doc.otaStatus.includes('Hata') || doc.otaStatus.includes('başarısız')) ? 'error' : 'success';
-                    setTimeout(() => { msgBox.innerText = ''; }, 5000);
                 }
-            } catch(e) {
-                console.error("JSON ayrıştırma hatası:", e);
-            }
+            } catch(e) { console.error("JSON ayrıştırma hatası:", e); }
         }
         function uploadFirmware() {
             let fileInput = document.getElementById('firmwareFile');
@@ -1836,37 +1810,23 @@ String manualUpdatePage() {
             }
             let formData = new FormData();
             formData.append('firmware', fileInput.files[0]);
-            fetch('/manual_update', {
-                method: 'POST',
-                body: formData
-            })
+            fetch('/manual_update', { method: 'POST', body: formData })
             .then(response => response.text())
             .then(data => {
-                console.log(data);
-                document.getElementById('message_box').innerText = 'Güncelleme gönderildi.';
-                document.getElementById('message_box').style.color = 'green';
-                setTimeout(() => { document.getElementById('message_box').innerText = ''; }, 5000);
+                document.getElementById('message_box').innerText = 'Güncelleme gönderildi. Cihaz yeniden başlatılıyor...';
+                document.getElementById('message_box').className = 'success';
             })
             .catch(error => {
-                console.error('Hata:', error);
                 document.getElementById('message_box').innerText = 'Güncelleme gönderilirken hata oluştu.';
-                document.getElementById('message_box').style.color = 'red';
-                setTimeout(() => { document.getElementById('message_box').innerText = ''; }, 5000);
+                document.getElementById('message_box').className = 'error';
             });
         }
         window.onload = function() {
             connectWebSocket();
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/sw.js').then((reg) => {
-                    console.log('Service Worker registered:', reg);
-                }).catch((error) => {
-                    console.error('Service Worker registration failed:', error);
-                });
-            }
         };
     </script>
 </body>
 </html>
-)UPDATE_PAGE";
+)UPDATE_HTML";
   return page;
 }
