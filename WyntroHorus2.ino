@@ -1680,38 +1680,40 @@ function handleMessage(data) {
             setTheme(event.target.value);
         });
     });
-    window.onload = function() {
-        loadTheme();
-        connectWebSocket();
-        showTab('settings');
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').then((reg) => {
-                console.log('Service Worker registered:', reg);
-            }).catch((error) => {
-                console.error('Service Worker registration failed:', error);
-            });
-        }
-    };
+	window.onload = function() {
+	  loadTheme();
+	  connectWebSocket();
+	  showTab('settings');
+	  if ('serviceWorker' in navigator) {
+	    navigator.serviceWorker.register('/sw.js').then((reg) => {
+	      console.log('Service Worker registered:', reg);
+	    }).catch((error) => {
+	      console.error('Service Worker registration failed:', error);
+	    });
+	  }
+	};
     let deferredPrompt;
 	const installButton = document.getElementById('pwa_install_button');
     window.addEventListener('beforeinstallprompt', (e) => {
-    	e.preventDefault();
-       	deferredPrompt = e;
-   	 	installButton.style.display = 'block';
-    });
+	  e.preventDefault();
+	  deferredPrompt = e;
+	  const installButton = document.getElementById('pwa_install_button');
+	  installButton.style.display = 'block';
+	  console.log('Install prompt ready');
+	});
     installButton.addEventListener('click', async () => {
     	if (deferredPrompt) {
-     	   deferredPrompt.prompt();
-     	   const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-            console.log('Kullanıcı uygulamayı yüklemeyi kabul etti.');
-        } else {
-            console.log('Kullanıcı uygulamayı yüklemeyi reddetti.');
-        }
-        deferredPrompt = null;
-        installButton.style.display = 'none';
-    }
-    });
+    		deferredPrompt.prompt();
+    		const { outcome } = await deferredPrompt.userChoice;
+    		if (outcome === 'accepted') {
+     		 console.log('User accepted install');
+   			} else {
+     		 console.log('User dismissed install');
+   		 }
+  		 deferredPrompt = null;
+ 		 document.getElementById('pwa_install_button').style.display = 'none';
+	  }
+	});
     window.addEventListener('appinstalled', () => {
     console.log('PWA başarıyla yüklendi.');
     installButton.style.display = 'none';
@@ -1774,6 +1776,7 @@ String manualUpdatePage() {
     <script>
         var ws;
         var reconnectInterval;
+		let deferredPrompt;
         
         function connectWebSocket() {
             if (ws && ws.readyState === WebSocket.OPEN) return;
