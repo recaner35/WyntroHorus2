@@ -1,4 +1,5 @@
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include <WebServer.h>
 #include <LittleFS.h>
 #include <WebSocketsServer.h>
@@ -67,6 +68,8 @@ WebServer server(80);
 WebSocketsServer webSocket(81);
 TaskHandle_t motorTaskHandle = NULL;
 DNSServer dnsServer;
+uint8_t baseMac[6];
+char mac_suffix[5];
 
 // Function prototypes
 void readSettings();
@@ -375,34 +378,31 @@ void writeWiFiSettings() {
 
 void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
-  readSettings(); 
- 
-  byte mac[6];
-  WiFi.macAddress(mac); // MAC adresini en başta bir kez oku
-  char mac_suffix[5];
-  sprintf(mac_suffix, "%02x%02x", mac[4], mac[5]); // Küçük harf için %x
+  readSettings();
 
-  // mDNS ismini oluştur (Bu kısım sizin istediğiniz gibi kalıyor)
+  // MAC adresini bir kez oku (WiFi başlatılmadan önce, base MAC)
+  esp_read_mac(baseMac, ESP_MAC_WIFI_STA); // Base WiFi STA MAC adresini al
+  sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]); // Küçük harf için %x
+
+  // mDNS ismini oluştur
   if (strcmp(custom_name, "") != 0) {
     String sanitizedName = sanitizeString(String(custom_name));
     snprintf(mDNS_hostname, sizeof(mDNS_hostname), "%s-%s", sanitizedName.c_str(), mac_suffix);
   } else {
     snprintf(mDNS_hostname, sizeof(mDNS_hostname), "horus-%s", mac_suffix);
   }
- 
+
   if (strcmp(ssid, "") == 0) {
     Serial.println("setupWiFi: Invalid WiFi credentials, running in AP mode only.");
-   
+
     char apSsid[32];
     snprintf(apSsid, sizeof(apSsid), "Horus-%s", mac_suffix);
-   
+
     WiFi.softAP(apSsid, default_password);
     IPAddress apIP = WiFi.softAPIP();
     Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
 
-    // --- YENİ EKLENEN SATIR (1) ---
     dnsServer.start(53, "*", apIP); // Captive portal için DNS sunucusunu başlat
-   
   } else {
     WiFi.mode(WIFI_STA);
     WiFi.begin(ssid, password);
@@ -413,40 +413,31 @@ void setupWiFi() {
       Serial.print(".");
       attempts++;
     }
-   
+
     if (WiFi.status() == WL_CONNECTED) {
       Serial.printf("\nsetupWiFi: Connected to %s, IP: %s\n", ssid, WiFi.localIP().toString().c_str());
-      // mDNS ana bilgisayar adını ayarla. (Bu kısım sizin istediğiniz gibi kalıyor)
+      // mDNS ana bilgisayar adını ayarla
       if (strcmp(custom_name, "") != 0) {
         String sanitizedName = sanitizeString(String(custom_name));
         strncpy(mDNS_hostname, sanitizedName.c_str(), sizeof(mDNS_hostname));
       } else {
-        byte mac[6];
-        WiFi.macAddress(mac);
         char macStr[13];
-        sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        sprintf(macStr, "%02X%02X%02X%02X%02X%02X", baseMac[0], baseMac[1], baseMac[2], baseMac[3], baseMac[4], baseMac[5]);
         sprintf(mDNS_hostname, "horus-%s", macStr + 8);
       }
-      
     } else {
       Serial.println("\nsetupWiFi: Failed to connect, running in AP mode.");
-      // Eğer bağlantı başarısız olursa AP moduna dön.
       WiFi.mode(WIFI_AP);
-      byte mac[6];
-      WiFi.macAddress(mac);
-      char macStr[13];
-      sprintf(macStr, "%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
       char apSsid[32];
-      sprintf(apSsid, "Horus-%s", macStr + 8);
+      sprintf(apSsid, "Horus-%s", mac_suffix);
       WiFi.softAP(apSsid, default_password);
       IPAddress apIP = WiFi.softAPIP();
       Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
-      
-      // --- YENİ EKLENEN SATIR (2) ---
-      dnsServer.start(53, "*", apIP); // Bağlantı başarısız olduğunda da DNS sunucusunu başlat
 
-      // mDNS ana bilgisayar adını AP adına göre ayarla.
-      sprintf(mDNS_hostname, "horus-%s", macStr + 8);
+      dnsServer.start(53, "*", apIP); // Bağlantı başarısız olduğunda DNS sunucusunu başlat
+
+      // mDNS ana bilgisayar adını AP adına göre ayarla
+      sprintf(mDNS_hostname, "horus-%s", mac_suffix);
     }
   }
 }
