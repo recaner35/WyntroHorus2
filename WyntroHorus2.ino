@@ -380,9 +380,10 @@ void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   readSettings();
 
-  // MAC adresini bir kez oku (WiFi başlatılmadan önce, base MAC)
-  esp_read_mac(baseMac, ESP_MAC_WIFI_STA); // Base WiFi STA MAC adresini al
-  sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]); // Küçük harf için %x
+  // WiFi modülünü başlatmadan önce MAC adresini al
+  WiFi.mode(WIFI_STA); // STA modunda sabit MAC için
+  WiFi.macAddress(baseMac); // Base MAC adresini al
+  sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]);
 
   // mDNS ismini oluştur
   if (strcmp(custom_name, "") != 0) {
@@ -639,10 +640,8 @@ void handleSaveWiFi() {
     if (new_name != old_name) {
       String sanitizedName = sanitizeString(new_name);
       
-      byte mac[6];
-      WiFi.macAddress(mac);
       char mac_suffix[5];
-      sprintf(mac_suffix, "%02x%02x", mac[4], mac[5]); // Küçük harf için %x
+      sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]); // Küçük harf için %x
 
       if (sanitizedName.length() > 0) {
         // Eğer bir isim girildiyse, ismin sonuna MAC ekle
