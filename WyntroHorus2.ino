@@ -22,7 +22,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.65";
+const char* FIRMWARE_VERSION = "v1.0.66";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -101,6 +101,7 @@ String sanitizeString(String input);
 
 void setup() {
   Serial.begin(115200);
+  vTaskDelay(pdMS_TO_TICKS(100));
   
   if (!LittleFS.begin(false)) {
     Serial.println("LittleFS mount failed, even after format!");
@@ -380,10 +381,11 @@ void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   readSettings();
 
-  // WiFi modülünü başlatmadan önce MAC adresini al
+  // MAC adresini bir kez oku
   WiFi.mode(WIFI_STA); // STA modunda sabit MAC için
+  vTaskDelay(pdMS_TO_TICKS(10)); // WiFi modülünün başlaması için kısa bir gecikme
   WiFi.macAddress(baseMac); // Base MAC adresini al
-  sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]);
+  sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]); // Küçük harf için %x
 
   // mDNS ismini oluştur
   if (strcmp(custom_name, "") != 0) {
@@ -399,6 +401,8 @@ void setupWiFi() {
     char apSsid[32];
     snprintf(apSsid, sizeof(apSsid), "Horus-%s", mac_suffix);
 
+    WiFi.mode(WIFI_AP); // AP moduna geç
+    vTaskDelay(pdMS_TO_TICKS(10)); // Mod geçişi için kısa bir gecikme
     WiFi.softAP(apSsid, default_password);
     IPAddress apIP = WiFi.softAPIP();
     Serial.printf("setupWiFi: AP started: %s, IP: %s\n", apSsid, apIP.toString().c_str());
@@ -410,7 +414,7 @@ void setupWiFi() {
     Serial.printf("setupWiFi: Connecting to %s", ssid);
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-      delay(500);
+      vTaskDelay(pdMS_TO_TICKS(500)); // WDT'yi sıfırlamak için vTaskDelay kullan
       Serial.print(".");
       attempts++;
     }
@@ -429,6 +433,7 @@ void setupWiFi() {
     } else {
       Serial.println("\nsetupWiFi: Failed to connect, running in AP mode.");
       WiFi.mode(WIFI_AP);
+      vTaskDelay(pdMS_TO_TICKS(10)); // Mod geçişi için kısa bir gecikme
       char apSsid[32];
       sprintf(apSsid, "Horus-%s", mac_suffix);
       WiFi.softAP(apSsid, default_password);
