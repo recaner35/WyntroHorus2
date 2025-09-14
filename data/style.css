@@ -1,0 +1,273 @@
+:root {
+    --bg-color: #111827;
+    --text-color: #f9fafb;
+    --primary-color: #3b82f6;
+    --secondary-color: #d1d5db;
+    --card-bg: #1f2937;
+    --border-color: #4b5563;
+    --tab-bg: #374151;
+    --tab-text: #f9fafb;
+    --tab-active-bg: var(--primary-color);
+}
+body.light {
+    --bg-color: #f3f4f6;
+    --text-color: #1f2937;
+    --primary-color: #2563eb;
+    --secondary-color: #4b5563;
+    --card-bg: #ffffff;
+    --border-color: #d1d5db;
+    --tab-bg: #e5e7eb;
+    --tab-text: #1f2937;
+    --tab-active-bg: var(--primary-color);
+}
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+.container {
+    width: 100%;
+    max-width: 600px;
+}
+.card {
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+}
+h1, h2 {
+    color: var(--primary-color);
+    text-align: center;
+}
+h1 {
+    font-size: 2.5em;
+}
+.status-section {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+.status-item {
+    background-color: var(--card-bg);
+    border-radius: 8px;
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    text-align: center;
+}
+.status-item span {
+    display: block;
+    font-size: 14px;
+    color: var(--secondary-color);
+}
+.status-item h3 {
+    margin: 5px 0 0;
+    font-size: 20px;
+    color: var(--text-color);
+    font-weight: bold;
+}
+.form-group {
+    margin-bottom: 15px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--secondary-color);
+}
+.form-group input[type="number"], .form-group select, .form-group input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    background-color: #374151;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-color);
+    box-sizing: border-box;
+}
+.form-group.inline-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.form-group.inline-group input[type="text"] {
+    flex-grow: 1;
+}
+body.light .form-group input[type="number"], body.light .form-group select, body.light .form-group input[type="text"] {
+    background-color: #e5e7eb;
+    color: #1f2937;
+}
+.form-group input[type="number"]:focus, .form-group select:focus, .form-group input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
+}
+.form-group input[type="range"] {
+    width: 100%;
+    margin: 0 auto;
+    display: block;
+}
+.radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+.radio-item {
+    flex: 1 1 0;
+    text-align: center;
+}
+.radio-item input[type="radio"] {
+    display: none;
+}
+.radio-item label {
+    display: block;
+    padding: 10px;
+    background-color: #374151;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+body.light .radio-item label {
+    background-color: #e5e7eb;
+    color: #1f2937;
+}
+.radio-item input[type="radio"]:checked + label {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: var(--text-color);
+}
+.button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+}
+.button {
+    flex: 1 1 auto;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    text-align: center;
+    border: none;
+    color: var(--text-color);
+}
+.button.primary {
+    background-color: var(--primary-color);
+}
+.button.primary:hover {
+    background-color: #2563eb;
+}
+.button.secondary {
+    background-color: #4b5563;
+}
+.button.secondary:hover {
+    background-color: #6b7280;
+}
+body.light .button.secondary {
+    background-color: #e5e7eb;
+    color: #1f2937;
+}
+body.light .button.secondary:hover {
+    background-color: #d1d5db;
+}
+#message_box {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #374151;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+    color: #f9fafb;
+    text-align: center;
+    display: none;
+}
+body.light #message_box {
+    background-color: #e5e7eb;
+    color: #1f2937;
+    border-color: #d1d5db;
+}
+.other-horus-list {
+    margin-top: 15px;
+}
+.other-horus-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px;
+    background-color: #374151;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    margin-bottom: 5px;
+}
+body.light .other-horus-item {
+    background-color: #e5e7eb;
+    color: #1f2937;
+}
+.other-horus-item span {
+    flex-grow: 1;
+    text-align: left;
+    padding-right: 10px;
+}
+.other-horus-item .button {
+    padding: 8px 12px;
+    font-size: 14px;
+}
+.tabs-container {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+    gap: 5px;
+}
+.tab {
+    padding: 10px 15px;
+    cursor: pointer;
+    background-color: var(--tab-bg);
+    color: var(--tab-text);
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    transition: background-color 0.3s;
+}
+.tab.active {
+    background-color: var(--primary-color);
+    color: #f9fafb;
+    border-color: var(--primary-color);
+}
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
+.card h1 {
+    display: none;
+}
+.logo-svg {
+    width: 100%;
+    max-width: 300px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    fill: var(--text-color);
+}
+.logo-svg path {
+    fill: currentColor;
+}
+.footer-text {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 0.8em;
+    color: var(--border-color);
+}
