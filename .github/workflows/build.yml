@@ -40,7 +40,7 @@ jobs:
         run: |
           echo "ESP32 platformu kuruluyor..."
           arduino-cli core update-index
-          arduino-cli core install esp32:esp32@2.0.14
+          arduino-cli core install esp32:esp32@3.3.0
 
       - name: Kütüphaneleri Kur
         run: |
@@ -128,8 +128,8 @@ jobs:
       - name: Kodu Derle
         run: |
           echo "Kod derleniyor..."
-          # `default_ota` şemasını kullanarak LittleFS boyutuyla uyum sağla
-          arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=default_ota --build-path ./build WyntroHorus2.ino
+          # Proje kök dizinindeki partitions.csv dosyası otomatik olarak kullanılacak.
+          arduino-cli compile --fqbn esp32:esp32:esp32 --build-path ./build WyntroHorus2.ino
 
       - name: Derleme Çıktısını Kontrol Et
         run: |
