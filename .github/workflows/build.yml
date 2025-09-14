@@ -150,12 +150,13 @@ jobs:
       - name: Yeni Sürümü GitHub’a Yükle
         uses: softprops/action-gh-release@v1
         with:
-          files: ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin
+          files: |
+            ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin
+            filesystem.bin
           tag_name: ${{ env.FIRMWARE_VERSION }}
           body: |
             Yeni firmware sürümü: ${{ env.FIRMWARE_VERSION }}
-            - Otomatik derleme ve OTA desteği
-            - WiFi tarama ve motor kontrolü iyileştirmeleri
+            - Arayüz iyileştirmeleri ve dil desteği
 
       - name: Binary'yi Pages için Hazırla
         run: |
@@ -171,10 +172,10 @@ jobs:
           echo "<html lang='en'>" >> public/index.html
           echo "<head>" >> public/index.html
           echo "  <meta charset='UTF-8'>" >> public/index.html
-          echo "  <title>Horus Firmware</title>" >> public/index.html
+          echo "  <title>Horus By Wyntro Firmware</title>" >> public/index.html
           echo "</head>" >> public/index.html
           echo "<body>" >> public/index.html
-          echo "  <h1>Horus Firmware</h1>" >> public/index.html
+          echo "  <h1>Horus By Wyntro Firmware</h1>" >> public/index.html
           echo "  <ul>" >> public/index.html
           echo "    <li><a href=\"$BIN_FILE\">$BIN_FILE</a></li>" >> public/index.html
           echo "  </ul>" >> public/index.html
