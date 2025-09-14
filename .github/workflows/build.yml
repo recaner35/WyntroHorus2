@@ -40,7 +40,7 @@ jobs:
         run: |
           echo "ESP32 platformu kuruluyor..."
           arduino-cli core update-index
-          arduino-cli core install esp32:esp32@3.3.0
+          arduino-cli core install esp32:esp32@2.0.14
 
       - name: Kütüphaneleri Kur
         run: |
