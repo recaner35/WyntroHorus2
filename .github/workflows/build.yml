@@ -68,7 +68,7 @@ jobs:
             echo "data/ klasörünün içeriği:"
             ls -la data/
             # LittleFS bölüm boyutunu default_ota şeması ile senkronize et (0x170000 = 1572864 bytes)
-            mklittlefs -c data/ -s 1572864 filesystem.bin
+            mklittlefs -c data/ -s 1507328 filesystem.bin
             if [ -f filesystem.bin ]; then
               echo "filesystem.bin başarıyla oluşturuldu."
               ls -la filesystem.bin
