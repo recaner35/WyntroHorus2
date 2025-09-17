@@ -51,6 +51,14 @@ const int IN2 = 5;
 const int IN3 = 18;
 const int IN4 = 19;
 
+// BUTON Tanımlamaları
+const int TOUCH_PIN = 23;
+
+int touchButtonState;             // Butonun mevcut durumunu tutar
+int lastTouchButtonState = LOW;   // Butonun önceki durumunu tutar
+unsigned long lastDebounceTime = 0; // En son sinyal değişim zamanı
+unsigned long debounceDelay = 50;   // Sinyal kararlılığı için bekleme süresi (ms)
+
 // Motor Constants
 const int stepsPerTurn = 4096;
 const int rampSteps = 200;
@@ -117,6 +125,7 @@ void setup() {
   pinMode(IN2, OUTPUT);
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
+  pinMode(TOUCH_PIN, INPUT);
   stopMotor();
   setupWiFi();
   setupMDNS();
@@ -128,11 +137,45 @@ void setup() {
   xTaskCreate(runMotorTask, "MotorTask", 4096, NULL, 1, NULL);
 }
 
+// YENİ EKLENEN FONKSİYON
+void checkTouchButton() {
+  // Dokunmatik pinden anlık sinyali oku
+  int reading = digitalRead(TOUCH_PIN);
+
+  // Eğer okunan sinyal bir önceki okumadan farklıysa, debounce zamanlayıcısını sıfırla
+  if (reading != lastTouchButtonState) {
+    lastDebounceTime = millis();
+  }
+
+  // Sinyal kararlı hale geldiyse (debounce süresi geçtiyse)
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    // Eğer butonun durumu değiştiyse
+    if (reading != touchButtonState) {
+      touchButtonState = reading;
+
+      // Sadece butonun yeni durumu HIGH (basılmış) ise işlem yap
+      if (touchButtonState == HIGH) {
+        Serial.println("Dokunmatik butona basıldı.");
+        // Motor çalışıyorsa durdur, çalışmıyorsa başlat
+        if (running) {
+          stopMotor();
+        } else {
+          startMotor();
+        }
+      }
+    }
+  }
+  
+  // Bir sonraki kontrol için mevcut durumu kaydet
+  lastTouchButtonState = reading;
+}
+
 void loop() {
   dnsServer.processNextRequest();
   server.handleClient();
   webSocket.loop();
   checkHourlyReset();
+  checkTouchButton();
 }
 
 String sanitizeString(String input) {
