@@ -22,7 +22,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.71";
+const char* FIRMWARE_VERSION = "v1.0.72";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -565,6 +565,26 @@ void setupWebServer() {
   });
     )SW_SCRIPT";
     server.send(200, "application/javascript", sw);
+  });
+
+  server.on("/style.css", HTTP_GET, []() {
+    File file = LittleFS.open("/style.css", "r");
+    if (!file) {
+      server.send(404, "text/plain", "File not found");
+      return;
+    }
+    server.streamFile(file, "text/css");
+    file.close();
+  });
+
+  server.on("/script.js", HTTP_GET, []() {
+    File file = LittleFS.open("/script.js", "r");
+    if (!file) {
+      server.send(404, "text/plain", "File not found");
+      return;
+    }
+    server.streamFile(file, "application/javascript");
+    file.close();
   });
 
   server.on("/icon-512x512.png", HTTP_GET, []() {
