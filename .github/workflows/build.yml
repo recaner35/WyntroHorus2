@@ -157,30 +157,34 @@ jobs:
           body: |
             Yeni firmware sürümü: ${{ env.FIRMWARE_VERSION }}
             - Arayüz iyileştirmeleri ve dil desteği
-
+            
       - name: Binary'yi Pages için Hazırla
         run: |
           mkdir -p public
-          BIN_FILE=firmware-${{ env.FIRMWARE_VERSION }}.bin
-          cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/$BIN_FILE
+          FW_FILE=firmware-${{ env.FIRMWARE_VERSION }}.bin
+          FS_FILE=filesystem-${{ env.FIRMWARE_VERSION }}.bin
 
-          # version.json oluştur
-          echo "{\"version\":\"${{ env.FIRMWARE_VERSION }}\", \"bin\":\"firmware-${{ env.FIRMWARE_VERSION }}.bin\"}" > public/version.json
+          cp ./build/wyntrohorus2-${{ env.FIRMWARE_VERSION }}.bin public/$FW_FILE
+          cp ./filesystem.bin public/$FS_FILE
 
-          # index.html oluştur
+          echo "{" > public/version.json
+          echo "  \"version\": \"${{ env.FIRMWARE_VERSION }}\"," >> public/version.json
+          echo "  \"app\": \"$FW_FILE\"," >> public/version.json
+          echo "  \"fs\": \"$FS_FILE\"" >> public/version.json
+          echo "}" >> public/version.json
+
           echo "<!DOCTYPE html>" > public/index.html
           echo "<html lang='en'>" >> public/index.html
-          echo "<head>" >> public/index.html
-          echo "  <meta charset='UTF-8'>" >> public/index.html
-          echo "  <title>Horus By Wyntro Firmware</title>" >> public/index.html
-          echo "</head>" >> public/index.html
+          echo "<head><meta charset='UTF-8'><title>Horus By Wyntro Firmware</title></head>" >> public/index.html
           echo "<body>" >> public/index.html
-          echo "  <h1>Horus By Wyntro Firmware</h1>" >> public/index.html
-          echo "  <ul>" >> public/index.html
-          echo "    <li><a href=\"$BIN_FILE\">$BIN_FILE</a></li>" >> public/index.html
-          echo "  </ul>" >> public/index.html
-          echo "</body>" >> public/index.html
-          echo "</html>" >> public/index.html
+          echo "<h1>Horus By Wyntro Firmware</h1>" >> public/index.html
+          echo "<ul>" >> public/index.html
+          echo "  <li><a href=\"$FW_FILE\">$FW_FILE</a></li>" >> public/index.html
+          echo "  <li><a href=\"$FS_FILE\">$FS_FILE</a></li>" >> public/index.html
+          echo "  <li><a href=\"version.json\">version.json</a></li>" >> public/index.html
+          echo "</ul>" >> public/index.html
+          echo "</body></html>" >> public/index.html
+
 
       - name: Pages Artifact Yükle
         uses: actions/upload-pages-artifact@v3
