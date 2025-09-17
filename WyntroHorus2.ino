@@ -109,6 +109,7 @@ String sanitizeString(String input);
 
 void setup() {
   Serial.begin(115200);
+  EEPROM.begin(512);
   vTaskDelay(pdMS_TO_TICKS(100));
   
   if (!LittleFS.begin(false)) {
