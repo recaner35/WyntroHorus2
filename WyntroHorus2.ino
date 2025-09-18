@@ -79,6 +79,8 @@ DNSServer dnsServer;
 uint8_t baseMac[6];
 char mac_suffix[5];
 const uint8_t EEPROM_INITIALIZED_FLAG = 0xAA;
+volatile bool scanInProgress = false;
+StaticJsonDocument<1024> scanDoc;
 
 // Function prototypes
 void readSettings();
@@ -122,6 +124,27 @@ void initEEPROM() {
   } else {
     Serial.println("initEEPROM: EEPROM zaten başlatılmış.");
   }
+}
+
+void onScanComplete(int networksFound) {
+  Serial.printf("handleScan: Scan finished. Found %d networks.\n", networksFound);
+  
+  scanDoc.clear();
+  scanDoc["networks"] = JsonArray();
+  JsonArray networks = scanDoc["networks"];
+  
+  for (int i = 0; i < networksFound; i++) {
+    JsonObject network = networks.createNestedObject();
+    network["ssid"] = WiFi.SSID(i);
+    network["rssi"] = WiFi.RSSI(i);
+    network["encryption"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "open" : "encrypted";
+  }
+  
+  String response;
+  serializeJson(scanDoc, response);
+  server.send(200, "application/json", response);
+  
+  scanInProgress = false;
 }
 
 void setup() {
@@ -759,35 +782,17 @@ void handleSaveWiFi() {
 }
 
 void handleScan() {
-  Serial.println("handleScan: Starting WiFi scan...");
-  
-  // Taramadan önce WiFi'yi tamamen kapat ve çakışmaları önle
-  WiFi.disconnect(true, true);
-  delay(200); // Donanımın durması için bekle
-  WiFi.mode(WIFI_STA);
-  delay(100);
-
-  int n = WiFi.scanNetworks();
-  
-  Serial.println("handleScan: Scan finished.");
-
-  String options = "";
-  if (n > 0) {
-    Serial.printf("handleScan: Found %d networks.\n", n);
-    for (int i = 0; i < n; i++) {
-      String ssid_scan = WiFi.SSID(i);
-      options += "<option value=\"" + ssid_scan + "\">" + ssid_scan + "</option>";
-    }
-  } else {
-    Serial.println("handleScan: No networks found or an error occurred.");
+  if (scanInProgress) {
+    server.send(429, "text/plain", "Tarama zaten devam ediyor!");
+    Serial.println("handleScan: Tarama zaten devam ediyor, yeni tarama başlatılmadı.");
+    return;
   }
-  
-  server.send(200, "text/plain", options);
 
-  // Taramadan sonra, sistemi en baştan temiz bir şekilde kurarak
-  // orijinal durumuna (AP + STA) geri döndür.
-  Serial.println("handleScan: Restoring WiFi state by re-initializing...");
-  setupWiFi(); 
+  Serial.println("handleScan: Starting WiFi scan...");
+  scanInProgress = true;
+  
+  // Asenkron tarama başlat
+  WiFi.scanNetworksAsync(onScanComplete);
 }
 
 void handleStatus() {
