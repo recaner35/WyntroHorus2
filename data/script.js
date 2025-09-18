@@ -1343,15 +1343,16 @@ function scanNetworks() {
     scanButton.innerText = getTranslation('scanningNetworks');
     scanButton.disabled = true;
     fetch('/scan')
-        .then(response => response.json()) // Yanıtı JSON olarak işle
+        .then(response => response.json()) // Yanıtın JSON formatında olduğunu belirtir
         .then(data => {
             const select = document.getElementById('ssidSelect');
-            select.innerHTML = ''; // Önceki seçenekleri temizle
+            select.innerHTML = ''; // Önceki listeyi temizler
             if (data.networks) {
+                // Bulunan her ağ için bir 'option' elementi oluşturur
                 data.networks.forEach(net => {
                     const option = document.createElement('option');
                     option.value = net.ssid;
-                    option.innerText = `${net.ssid}`; // Ağ adını ve sinyal gücünü göster
+                    option.innerText = `${net.ssid} (${net.rssi})`;
                     select.appendChild(option);
                 });
             }
@@ -1437,5 +1438,6 @@ function uploadFirmware() {
     });
 
 }
+
 
 
