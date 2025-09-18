@@ -685,58 +685,35 @@ void handleScan() {
   server.send(200, "text/plain", options);
 }
 
-void handleSaveWiFi() {
-  bool restartRequired = false;
+void handleScan() {
+  Serial.println("handleScan: Starting WiFi scan...");
+  
+  // Taramadan önce mevcut bağlantıyı kes ve modu değiştir
+  WiFi.disconnect();
+  WiFi.mode(WIFI_STA);
+  delay(100); // Mod değişikliği için kısa bir bekleme
 
-  // Sadece WiFi bilgileri gönderildiyse restart gerekir
-  if (server.hasArg("ssid")) {
-    strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid) - 1);
-    ssid[sizeof(ssid) - 1] = '\0'; // Güvenlik için null sonlandırıcı ekle
+  int n = WiFi.scanNetworks();
+  
+  Serial.println("handleScan: Scan finished.");
 
-    strncpy(password, server.arg("password").c_str(), sizeof(password) - 1);
-    password[sizeof(password) - 1] = '\0'; // Güvenlik için null sonlandırıcı ekle
-    
-    restartRequired = true;
-  }
-
-  // İsim her durumda güncellenebilir
-  if (server.hasArg("name")) {
-    String old_name = String(custom_name);
-    String new_name = server.arg("name");
-    
-    strncpy(custom_name, new_name.c_str(), sizeof(custom_name) - 1);
-    custom_name[sizeof(custom_name) - 1] = '\0'; // Güvenlik için null sonlandırıcı ekle
-
-    // Eğer isim gerçekten değiştiyse mDNS'i yeniden başlat
-    if (new_name != old_name) {
-      String sanitizedName = sanitizeString(new_name);
-      char mac_suffix[5];
-      sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]); // Küçük harf için %x
-
-      if (sanitizedName.length() > 0) {
-        // Eğer bir isim girildiyse, ismin sonuna MAC ekle
-        snprintf(mDNS_hostname, sizeof(mDNS_hostname), "%s-%s", sanitizedName.c_str(), mac_suffix);
-      } else {
-        // Eğer isim boş ise, standart ismi kullan
-        snprintf(mDNS_hostname, sizeof(mDNS_hostname), "horus-%s", mac_suffix);
-      }
-      
-      MDNS.end();
-      setupMDNS();
+  String options = "";
+  if (n > 0) {
+    Serial.printf("handleScan: Found %d networks.\n", n);
+    for (int i = 0; i < n; i++) {
+      String ssid_scan = WiFi.SSID(i);
+      options += "<option value=\"" + ssid_scan + "\">" + ssid_scan + "</option>";
     }
-  }
-
-  writeWiFiSettings(); // Ayarları EEPROM'a yaz
-  server.send(200, "text/plain", "OK");
-
-  if (restartRequired) {
-    Serial.println("handleSaveWiFi: WiFi settings saved, restarting...");
-    delay(1000);
-    ESP.restart();
   } else {
-    Serial.println("handleSaveWiFi: Device name updated. New mDNS: " + String(mDNS_hostname));
-    updateWebSocket(); // Arayüzü yeni isimle güncelle
+    Serial.println("handleScan: No networks found or an error occurred.");
   }
+  
+  server.send(200, "text/plain", options);
+
+  // Taramadan sonra, orijinal WiFi ve AP durumunu yeniden kur
+  // Bu, sistemi en temiz ve kararlı hale getirir.
+  Serial.println("handleScan: Restoring WiFi state...");
+  setupWiFi(); 
 }
 
 void handleStatus() {
