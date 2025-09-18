@@ -78,6 +78,7 @@ TaskHandle_t motorTaskHandle = NULL;
 DNSServer dnsServer;
 uint8_t baseMac[6];
 char mac_suffix[5];
+const uint8_t EEPROM_INITIALIZED_FLAG = 0xAA;
 
 // Function prototypes
 void readSettings();
@@ -107,10 +108,27 @@ bool isNewVersionAvailable(String latest, String current);
 void checkOTAUpdateTask(void *parameter);
 String sanitizeString(String input);
 
+void initEEPROM() {
+  uint8_t flag;
+  EEPROM.readBytes(0, &flag, 1);
+  if (flag != EEPROM_INITIALIZED_FLAG) {
+    Serial.println("initEEPROM: EEPROM başlatılmamış, sıfırlanıyor...");
+    for (int i = 0; i < 512; i++) {
+      EEPROM.writeByte(i, 0);
+    }
+    EEPROM.writeByte(0, EEPROM_INITIALIZED_FLAG);
+    EEPROM.commit();
+    Serial.println("initEEPROM: EEPROM sıfırlandı.");
+  } else {
+    Serial.println("initEEPROM: EEPROM zaten başlatılmış.");
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   EEPROM.begin(512);
   vTaskDelay(pdMS_TO_TICKS(100));
+  initEEPROM();
   
   if (!LittleFS.begin(false)) {
     Serial.println("LittleFS mount failed, even after format!");
@@ -172,6 +190,12 @@ void checkTouchButton() {
 }
 
 void loop() {
+  static unsigned long lastWiFiCheck = 0;
+  if (strlen(ssid) > 0 && WiFi.status() != WL_CONNECTED && millis() - lastWiFiCheck > 30000) {
+    Serial.println("loop: WiFi bağlantısı koptu, yeniden bağlanılıyor...");
+    WiFi.begin(ssid, password);
+    lastWiFiCheck = millis();
+  }
   dnsServer.processNextRequest();
   server.handleClient();
   webSocket.loop();
@@ -220,6 +244,10 @@ String sanitizeString(String input) {
   }
   while (output.endsWith("-")) {
     output.remove(output.length() - 1);
+  }
+
+  if (output.length() == 0) {
+    output = "horus";
   }
 
   return output;
@@ -374,7 +402,7 @@ void runMotorTask(void *parameter) {
 }
 
 void readSettings() {
-  int address = 0;
+  int address = 1; // Bayraktan sonra başla
   EEPROM.readBytes(address, ssid, sizeof(ssid));
   address += sizeof(ssid);
   EEPROM.readBytes(address, password, sizeof(password));
@@ -387,10 +415,22 @@ void readSettings() {
   address += sizeof(turnDuration);
   EEPROM.get(address, direction);
 
-  // GÜVENLİK GÜNCELLEMESİ: Verinin her zaman geçerli bir metin olmasını sağla
+  // Veriyi geçerli bir metin yap
   ssid[sizeof(ssid) - 1] = '\0';
   password[sizeof(password) - 1] = '\0';
   custom_name[sizeof(custom_name) - 1] = '\0';
+
+  // SSID'nin geçerli olup olmadığını kontrol et
+  bool validSSID = true;
+  for (int i = 0; i < strlen(ssid); i++) {
+    if (!isPrintable(ssid[i])) {
+      validSSID = false;
+      break;
+    }
+  }
+  if (!validSSID || strlen(ssid) == 0) {
+    ssid[0] = '\0'; // Geçersiz veya boşsa sıfırla
+  }
 
   if (turnsPerDay < 600 || turnsPerDay > 1200 || isnan(turnsPerDay)) turnsPerDay = 600;
   if (turnDuration < 10.0 || turnDuration > 15.0 || isnan(turnDuration)) turnDuration = 15.0;
@@ -399,8 +439,8 @@ void readSettings() {
   hourlyTurns = turnsPerDay / 24;
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
-  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms\n",
-                turnsPerDay, turnDuration, direction, calculatedStepDelay);
+  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms, SSID=%s\n",
+                turnsPerDay, turnDuration, direction, calculatedStepDelay, ssid);
 }
 
 void writeMotorSettings() {
@@ -429,21 +469,16 @@ void setupWiFi() {
   Serial.println("setupWiFi: Initializing...");
   readSettings();
   
-  WiFi.mode(WIFI_AP_STA); // Her iki modu da desteklemesi için
+  WiFi.mode(WIFI_AP_STA);
   vTaskDelay(pdMS_TO_TICKS(10));
   WiFi.macAddress(baseMac);
   sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]);
 
-  // --- Tutarlı ve doğru mDNS oluşturma mantığı ---
-  if (strlen(custom_name) > 0) {
-    String sanitizedName = sanitizeString(String(custom_name));
-    snprintf(mDNS_hostname, sizeof(mDNS_hostname), "%s-%s", sanitizedName.c_str(), mac_suffix);
-  } else {
-    snprintf(mDNS_hostname, sizeof(mDNS_hostname), "horus-%s", mac_suffix);
-  }
-  // --- Bitiş ---
+  // mDNS adını oluştur
+  String sanitizedName = sanitizeString(String(custom_name));
+  snprintf(mDNS_hostname, sizeof(mDNS_hostname), "%s-%s", sanitizedName.c_str(), mac_suffix);
 
-  // AP Modunu her zaman başlat
+  // AP Modunu başlat
   char apSsid[32];
   snprintf(apSsid, sizeof(apSsid), "Horus-%s", mac_suffix);
   WiFi.softAP(apSsid, default_password);
@@ -453,22 +488,21 @@ void setupWiFi() {
   
   // Kayıtlı WiFi varsa bağlanmayı dene
   if (strlen(ssid) > 0) {
+    Serial.printf("setupWiFi: Connecting to %s\n", ssid);
     WiFi.begin(ssid, password);
-    Serial.printf("setupWiFi: Connecting to %s", ssid);
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    unsigned long startTime = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000) {
       vTaskDelay(pdMS_TO_TICKS(500));
       Serial.print(".");
-      attempts++;
     }
 
     if (WiFi.status() == WL_CONNECTED) {
       Serial.printf("\nsetupWiFi: Connected to %s, IP: %s\n", ssid, WiFi.localIP().toString().c_str());
     } else {
-      Serial.println("\nsetupWiFi: Failed to connect to saved WiFi.");
+      Serial.println("\nsetupWiFi: Failed to connect to saved WiFi. Keeping saved credentials.");
     }
   } else {
-      Serial.println("setupWiFi: No saved WiFi credentials.");
+    Serial.println("setupWiFi: No saved WiFi credentials, running in AP mode only.");
   }
 }
 
