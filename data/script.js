@@ -1343,16 +1343,15 @@ function scanNetworks() {
     scanButton.innerText = getTranslation('scanningNetworks');
     scanButton.disabled = true;
     fetch('/scan')
-        .then(response => response.json()) // Changed to response.json()
+        .then(response => response.json()) // Yanıtı JSON olarak işle
         .then(data => {
             const select = document.getElementById('ssidSelect');
-            select.innerHTML = ''; // Clear previous options
+            select.innerHTML = ''; // Önceki seçenekleri temizle
             if (data.networks) {
                 data.networks.forEach(net => {
                     const option = document.createElement('option');
                     option.value = net.ssid;
-                    // BSSID is not in the JSON, but you can add it if you want
-                    option.innerText = `${net.ssid} (${net.rssi})`;
+                    option.innerText = `${net.ssid}`; // Ağ adını ve sinyal gücünü göster
                     select.appendChild(option);
                 });
             }
@@ -1360,7 +1359,7 @@ function scanNetworks() {
             scanButton.disabled = false;
         })
         .catch(error => {
-            console.error('Error:', error);
+            console.error('Hata:', error);
             scanButton.innerText = originalText;
             scanButton.disabled = false;
         });
@@ -1438,4 +1437,5 @@ function uploadFirmware() {
     });
 
 }
+
 
