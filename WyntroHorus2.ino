@@ -80,7 +80,7 @@ uint8_t baseMac[6];
 char mac_suffix[5];
 const uint8_t EEPROM_INITIALIZED_FLAG = 0xAA;
 volatile bool scanInProgress = false;
-StaticJsonDocument<1024> scanDoc;
+StaticJsonDocument<2048> scanDoc;
 
 // Function prototypes
 void readSettings();
