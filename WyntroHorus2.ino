@@ -22,7 +22,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.74";
+const char* FIRMWARE_VERSION = "v1.0.75";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -79,7 +79,6 @@ DNSServer dnsServer;
 uint8_t baseMac[6];
 char mac_suffix[5];
 const uint8_t EEPROM_INITIALIZED_FLAG = 0xAA;
-volatile bool scanInProgress = false;
 StaticJsonDocument<2048> scanDoc;
 
 // Function prototypes
@@ -126,26 +125,6 @@ void initEEPROM() {
   }
 }
 
-void onScanComplete(int networksFound) {
-  Serial.printf("handleScan: Scan finished. Found %d networks.\n", networksFound);
-  
-  scanDoc.clear();
-  scanDoc["networks"] = JsonArray();
-  JsonArray networks = scanDoc["networks"];
-  
-  for (int i = 0; i < networksFound; i++) {
-    JsonObject network = networks.createNestedObject();
-    network["ssid"] = WiFi.SSID(i);
-    network["rssi"] = WiFi.RSSI(i);
-    network["encryption"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "open" : "encrypted";
-  }
-  
-  String response;
-  serializeJson(scanDoc, response);
-  server.send(200, "application/json", response);
-  
-  scanInProgress = false;
-}
 
 void setup() {
   Serial.begin(115200);
@@ -782,34 +761,33 @@ void handleSaveWiFi() {
 }
 
 void handleScan() {
-  if (scanInProgress) {
-    server.send(429, "text/plain", "Tarama zaten devam ediyor!");
-    Serial.println("handleScan: Tarama zaten devam ediyor, yeni tarama başlatılmadı.");
-    return;
-  }
-
-  Serial.println("handleScan: Starting WiFi scan...");
-  scanInProgress = true;
-  
-  // WiFi modunu değiştiren kodlar kaldırıldı.
-  int networksFound = WiFi.scanNetworks();
-  Serial.printf("handleScan: Scan finished. Found %d networks.\n", networksFound);
-  
-  scanDoc.clear();
-  scanDoc["networks"] = JsonArray();
-  JsonArray networks = scanDoc["networks"];
-  for (int i = 0; i < networksFound; i++) {
-    JsonObject network = networks.createNestedObject();
-    network["ssid"] = WiFi.SSID(i);
-    network["rssi"] = WiFi.RSSI(i);
-    network["encryption"] = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ? "open" : "encrypted";
-  }
-
-  String response;
-  serializeJson(scanDoc, response);
-  server.send(200, "application/json", response);
-  
-  scanInProgress = false;
+    Serial.println("handleScan: Ağ taraması başlatılıyor (sync)...");
+    
+    int networksFound = WiFi.scanNetworks();  // Senkron tarama
+    
+    if (networksFound == WIFI_SCAN_FAILED) {
+        Serial.println("handleScan: Tarama başarısız.");
+        server.send(200, "application/json", "{\"status\":\"Scan failed\"}");
+        return;
+    }
+    
+    Serial.printf("handleScan: Bulunan ağlar: %d\n", networksFound);
+    
+    scanDoc.clear();
+    scanDoc["networks"] = JsonArray();
+    JsonArray networks = scanDoc["networks"];
+    
+    for (int i = 0; i < networksFound; i++) {
+        JsonObject network = networks.createNestedObject();
+        network["ssid"] = WiFi.SSID(i);
+        network["rssi"] = WiFi.RSSI(i);
+    }
+    
+    String response;
+    serializeJson(scanDoc, response);
+    server.send(200, "application/json", response);
+    
+    WiFi.scanDelete();  // Hafızayı temizle
 }
 
 void handleStatus() {
