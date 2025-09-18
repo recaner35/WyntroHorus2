@@ -687,55 +687,15 @@ void handleScan() {
 
 void handleSaveWiFi() {
   bool restartRequired = false;
-  if (server.hasArg("ssid")) {
-    strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid) - 1);
-    ssid[sizeof(ssid) - 1] = '\0'; // Güvenlik için null terminator ekle
-    
-    strncpy(password, server.arg("password").c_str(), sizeof(password) - 1);
-    password[sizeof(password) - 1] = '\0'; // Güvenlik için null terminator ekle
 
-    restartRequired = true;
-  }
-
-  if (server.hasArg("name")) {
-    String old_name = String(custom_name);
-    String new_name = server.arg("name");
-    
-    strncpy(custom_name, new_name.c_str(), sizeof(custom_name) - 1);
-    custom_name[sizeof(custom_name) - 1] = '\0'; // Güvenlik için null terminator ekle
-
-    if (new_name != old_name) {
-      String sanitizedName = sanitizeString(new_name);
-      char mac_suffix[5];
-      sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]);
-
-      if (sanitizedName.length() > 0) {
-        snprintf(mDNS_hostname, sizeof(mDNS_hostname), "%s-%s", sanitizedName.c_str(), mac_suffix);
-      } else {
-        snprintf(mDNS_hostname, sizeof(mDNS_hostname), "horus-%s", mac_suffix);
-      }
-      
-      MDNS.end();
-      setupMDNS();
-    }
-  }
-
-  writeWiFiSettings();
-  server.send(200, "text/plain", "OK");
-
-  if (restartRequired) {
-    Serial.println("handleSaveWiFi: WiFi settings saved, restarting...");
-    delay(1000);
-    ESP.restart();
-  } else {
-    Serial.println("handleSaveWiFi: Device name updated. New mDNS: " + String(mDNS_hostname));
-    updateWebSocket();
-  }
-}
   // Sadece WiFi bilgileri gönderildiyse restart gerekir
   if (server.hasArg("ssid")) {
-    strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid));
-    strncpy(password, server.arg("password").c_str(), sizeof(password));
+    strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid) - 1);
+    ssid[sizeof(ssid) - 1] = '\0'; // Güvenlik için null sonlandırıcı ekle
+
+    strncpy(password, server.arg("password").c_str(), sizeof(password) - 1);
+    password[sizeof(password) - 1] = '\0'; // Güvenlik için null sonlandırıcı ekle
+    
     restartRequired = true;
   }
 
@@ -744,12 +704,12 @@ void handleSaveWiFi() {
     String old_name = String(custom_name);
     String new_name = server.arg("name");
     
-    strncpy(custom_name, new_name.c_str(), sizeof(custom_name));
+    strncpy(custom_name, new_name.c_str(), sizeof(custom_name) - 1);
+    custom_name[sizeof(custom_name) - 1] = '\0'; // Güvenlik için null sonlandırıcı ekle
 
     // Eğer isim gerçekten değiştiyse mDNS'i yeniden başlat
     if (new_name != old_name) {
       String sanitizedName = sanitizeString(new_name);
-      
       char mac_suffix[5];
       sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]); // Küçük harf için %x
 
