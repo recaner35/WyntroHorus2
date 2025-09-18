@@ -790,27 +790,13 @@ void handleScan() {
 
   Serial.println("handleScan: Starting WiFi scan...");
   scanInProgress = true;
-
-  // Mevcut WiFi durumunu kaydet
-  bool wasConnected = (WiFi.status() == WL_CONNECTED);
-  String savedSSID = WiFi.SSID();
-  String savedPassword = WiFi.psk();
-  bool wasAPActive = WiFi.softAPgetStationNum() > 0;
-
-  // Tarama için geçici olarak STA moduna geç
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  vTaskDelay(pdMS_TO_TICKS(100));
-
-  // WiFi taramasını yap
+  
   int networksFound = WiFi.scanNetworks();
   Serial.printf("handleScan: Scan finished. Found %d networks.\n", networksFound);
-
-  // Tarama sonuçlarını hazırla
+  
   scanDoc.clear();
   scanDoc["networks"] = JsonArray();
   JsonArray networks = scanDoc["networks"];
-  
   for (int i = 0; i < networksFound; i++) {
     JsonObject network = networks.createNestedObject();
     network["ssid"] = WiFi.SSID(i);
@@ -821,27 +807,10 @@ void handleScan() {
   String response;
   serializeJson(scanDoc, response);
   server.send(200, "application/json", response);
-
-  // WiFi durumunu geri yükle
-  Serial.println("handleScan: Restoring WiFi state...");
-  WiFi.mode(WIFI_AP_STA);
   
-  // AP modunu geri başlat
-  char apSsid[32];
-  snprintf(apSsid, sizeof(apSsid), "Horus-%s", mac_suffix);
-  WiFi.softAP(apSsid, default_password);
-  IPAddress apIP = WiFi.softAPIP();
-  Serial.printf("handleScan: AP restored: %s, IP: %s\n", apSsid, apIP.toString().c_str());
-  dnsServer.start(53, "*", apIP);
-
-  // Eğer daha önce bir WiFi ağına bağlıysa, yeniden bağlanmayı dene
-  if (wasConnected && savedSSID.length() > 0) {
-    Serial.printf("handleScan: Reconnecting to %s\n", savedSSID.c_str());
-    WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
-  }
-
   scanInProgress = false;
 }
+
 void handleStatus() {
   StaticJsonDocument<256> doc;
   doc["status"] = running ? "Çalışıyor" : "Durduruldu";
