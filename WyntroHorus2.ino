@@ -420,7 +420,7 @@ void runMotorTask(void *parameter) {
         }
       }
     }
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 
@@ -1119,10 +1119,10 @@ void updateWebSocket() {
   doc["customName"] = custom_name; 
   doc["mDNSHostname"] = mDNS_hostname;
 
-  if (WiFi.getMode() == WIFI_AP) {
-    doc["ip"] = WiFi.softAPIP().toString();
-  } else {
+  if (WiFi.status() == WL_CONNECTED) {
     doc["ip"] = WiFi.localIP().toString();
+  } else {
+    doc["ip"] = WiFi.softAPIP().toString();
   }
 
   JsonArray otherHorus = doc.createNestedArray("otherHorus");
