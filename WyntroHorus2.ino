@@ -386,15 +386,17 @@ void readSettings() {
   EEPROM.get(address, turnDuration);
   address += sizeof(turnDuration);
   EEPROM.get(address, direction);
+
+  // --- GÜVENLİK GÜNCELLEMESİ: Verinin her zaman geçerli bir metin olmasını sağla ---
   ssid[sizeof(ssid) - 1] = '\0';
   password[sizeof(password) - 1] = '\0';
   custom_name[sizeof(custom_name) - 1] = '\0';
+  // --- BİTİŞ ---
+
   if (turnsPerDay < 600 || turnsPerDay > 1200 || isnan(turnsPerDay)) turnsPerDay = 600;
   if (turnDuration < 10.0 || turnDuration > 15.0 || isnan(turnDuration)) turnDuration = 15.0;
   if (direction < 1 || direction > 3) direction = 1;
-  if (strlen(ssid) > 31) ssid[0] = '\0';
-  if (strlen(password) > 63) password[0] = '\0';
-  if (strlen(custom_name) > 20) custom_name[0] = '\0';
+
   hourlyTurns = turnsPerDay / 24;
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
   calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
@@ -677,36 +679,31 @@ void handleSet() {
 void handleSaveWiFi() {
   bool restartRequired = false;
 
-  // Sadece WiFi bilgileri gönderildiyse restart gerekir
   if (server.hasArg("ssid")) {
     strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid) - 1);
-    ssid[sizeof(ssid) - 1] = '\0'; // Güvenlik için null sonlandırıcı ekle
+    ssid[sizeof(ssid) - 1] = '\0'; 
 
     strncpy(password, server.arg("password").c_str(), sizeof(password) - 1);
-    password[sizeof(password) - 1] = '\0'; // Güvenlik için null sonlandırıcı ekle
+    password[sizeof(password) - 1] = '\0';
     
     restartRequired = true;
   }
 
-  // İsim her durumda güncellenebilir
   if (server.hasArg("name")) {
     String old_name = String(custom_name);
     String new_name = server.arg("name");
     
     strncpy(custom_name, new_name.c_str(), sizeof(custom_name) - 1);
-    custom_name[sizeof(custom_name) - 1] = '\0'; // Güvenlik için null sonlandırıcı ekle
+    custom_name[sizeof(custom_name) - 1] = '\0';
 
-    // Eğer isim gerçekten değiştiyse mDNS'i yeniden başlat
     if (new_name != old_name) {
       String sanitizedName = sanitizeString(new_name);
       char mac_suffix[5];
-      sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]); // Küçük harf için %x
+      sprintf(mac_suffix, "%02x%02x", baseMac[4], baseMac[5]);
 
       if (sanitizedName.length() > 0) {
-        // Eğer bir isim girildiyse, ismin sonuna MAC ekle
         snprintf(mDNS_hostname, sizeof(mDNS_hostname), "%s-%s", sanitizedName.c_str(), mac_suffix);
       } else {
-        // Eğer isim boş ise, standart ismi kullan
         snprintf(mDNS_hostname, sizeof(mDNS_hostname), "horus-%s", mac_suffix);
       }
       
@@ -715,7 +712,7 @@ void handleSaveWiFi() {
     }
   }
 
-  writeWiFiSettings(); // Ayarları EEPROM'a yaz
+  writeWiFiSettings();
   server.send(200, "text/plain", "OK");
 
   if (restartRequired) {
@@ -724,17 +721,17 @@ void handleSaveWiFi() {
     ESP.restart();
   } else {
     Serial.println("handleSaveWiFi: Device name updated. New mDNS: " + String(mDNS_hostname));
-    updateWebSocket(); // Arayüzü yeni isimle güncelle
+    updateWebSocket();
   }
 }
 
 void handleScan() {
   Serial.println("handleScan: Starting WiFi scan...");
   
-  // Taramadan önce mevcut bağlantıyı kes ve modu değiştir
+  // Taramadan önce mevcut bağlantıyı kes ve modu sadece tarama için ayarla
   WiFi.disconnect();
   WiFi.mode(WIFI_STA);
-  delay(100); // Mod değişikliği için kısa bir bekleme
+  delay(100);
 
   int n = WiFi.scanNetworks();
   
@@ -753,9 +750,10 @@ void handleScan() {
   
   server.send(200, "text/plain", options);
 
-  // Taramadan sonra, orijinal WiFi ve AP durumunu yeniden kur
-  // Bu, sistemi en temiz ve kararlı hale getirir.
+  // Taramadan sonra sistemi orijinal durumuna (AP + STA) geri döndür
   Serial.println("handleScan: Restoring WiFi state...");
+  WiFi.mode(WIFI_AP_STA);
+  // Kayıtlı ağa yeniden bağlanmayı denemesi için setupWiFi'yi tekrar çağır
   setupWiFi(); 
 }
 
