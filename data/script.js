@@ -1343,9 +1343,19 @@ function scanNetworks() {
     scanButton.innerText = getTranslation('scanningNetworks');
     scanButton.disabled = true;
     fetch('/scan')
-        .then(response => response.text())
+        .then(response => response.json()) // Changed to response.json()
         .then(data => {
-            document.getElementById('ssidSelect').innerHTML = data;
+            const select = document.getElementById('ssidSelect');
+            select.innerHTML = ''; // Clear previous options
+            if (data.networks) {
+                data.networks.forEach(net => {
+                    const option = document.createElement('option');
+                    option.value = net.ssid;
+                    // BSSID is not in the JSON, but you can add it if you want
+                    option.innerText = `${net.ssid} (${net.rssi})`;
+                    select.appendChild(option);
+                });
+            }
             scanButton.innerText = originalText;
             scanButton.disabled = false;
         })
@@ -1428,3 +1438,4 @@ function uploadFirmware() {
     });
 
 }
+
