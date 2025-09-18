@@ -675,17 +675,6 @@ void handleSet() {
 }
 
 void handleScan() {
-  String options = "";
-  int n = WiFi.scanNetworks();
-  for (int i = 0; i < n; i++) {
-    String ssid_scan = WiFi.SSID(i);
-    options += "<option value=\"" + ssid_scan + "\">" + ssid_scan + "</option>";
-  }
-  Serial.println("handleScan: WiFi scan completed, found " + String(n) + " networks.");
-  server.send(200, "text/plain", options);
-}
-
-void handleScan() {
   Serial.println("handleScan: Starting WiFi scan...");
   
   // Taramadan önce mevcut bağlantıyı kes ve modu değiştir
