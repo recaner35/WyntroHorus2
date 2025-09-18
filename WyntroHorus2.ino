@@ -387,11 +387,10 @@ void readSettings() {
   address += sizeof(turnDuration);
   EEPROM.get(address, direction);
 
-  // --- GÜVENLİK GÜNCELLEMESİ: Verinin her zaman geçerli bir metin olmasını sağla ---
+  // GÜVENLİK GÜNCELLEMESİ: Verinin her zaman geçerli bir metin olmasını sağla
   ssid[sizeof(ssid) - 1] = '\0';
   password[sizeof(password) - 1] = '\0';
   custom_name[sizeof(custom_name) - 1] = '\0';
-  // --- BİTİŞ ---
 
   if (turnsPerDay < 600 || turnsPerDay > 1200 || isnan(turnsPerDay)) turnsPerDay = 600;
   if (turnDuration < 10.0 || turnDuration > 15.0 || isnan(turnDuration)) turnDuration = 15.0;
@@ -728,8 +727,9 @@ void handleSaveWiFi() {
 void handleScan() {
   Serial.println("handleScan: Starting WiFi scan...");
   
-  // Taramadan önce mevcut bağlantıyı kes ve modu sadece tarama için ayarla
-  WiFi.disconnect();
+  // Taramadan önce WiFi'yi tamamen kapat ve çakışmaları önle
+  WiFi.disconnect(true, true);
+  delay(200); // Donanımın durması için bekle
   WiFi.mode(WIFI_STA);
   delay(100);
 
@@ -750,10 +750,9 @@ void handleScan() {
   
   server.send(200, "text/plain", options);
 
-  // Taramadan sonra sistemi orijinal durumuna (AP + STA) geri döndür
-  Serial.println("handleScan: Restoring WiFi state...");
-  WiFi.mode(WIFI_AP_STA);
-  // Kayıtlı ağa yeniden bağlanmayı denemesi için setupWiFi'yi tekrar çağır
+  // Taramadan sonra, sistemi en baştan temiz bir şekilde kurarak
+  // orijinal durumuna (AP + STA) geri döndür.
+  Serial.println("handleScan: Restoring WiFi state by re-initializing...");
   setupWiFi(); 
 }
 
