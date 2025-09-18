@@ -791,6 +791,7 @@ void handleScan() {
   Serial.println("handleScan: Starting WiFi scan...");
   scanInProgress = true;
   
+  // WiFi modunu değiştiren kodlar kaldırıldı.
   int networksFound = WiFi.scanNetworks();
   Serial.printf("handleScan: Scan finished. Found %d networks.\n", networksFound);
   
