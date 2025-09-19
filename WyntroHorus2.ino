@@ -111,10 +111,10 @@ String sanitizeString(String input);
 void initEEPROM() {
     uint8_t flag1, flag2;
     EEPROM.readBytes(0, &flag1, 1);
-    EEPROM.readBytes(1023, &flag2, 1); // Yedek bayrak son konumda
+    EEPROM.readBytes(1023, &flag2, 1);
     Serial.printf("initEEPROM: Bayrak1=0x%02X, Bayrak2=0x%02X\n", flag1, flag2);
     
-    bool initialized = (flag1 == EEPROM_INITIALIZED_FLAG) || (flag2 == EEPROM_INITIALIZED_FLAG);
+    bool initialized = (flag1 == EEPROM_INITIALIZED_FLAG && flag2 == EEPROM_INITIALIZED_FLAG);
     
     if (!initialized) {
         Serial.println("initEEPROM: EEPROM başlatılmamış, sıfırlanıyor...");
@@ -134,28 +134,35 @@ void initEEPROM() {
         }
         EEPROM.writeByte(0, EEPROM_INITIALIZED_FLAG);
         EEPROM.writeByte(1023, EEPROM_INITIALIZED_FLAG);
+        EEPROM.commit();
+        
+        // Yazma işlemini doğrula
+        uint8_t verifyFlag1, verifyFlag2;
+        EEPROM.readBytes(0, &verifyFlag1, 1);
+        EEPROM.readBytes(1023, &verifyFlag2, 1);
+        if (verifyFlag1 != EEPROM_INITIALIZED_FLAG || verifyFlag2 != EEPROM_INITIALIZED_FLAG) {
+            Serial.println("initEEPROM: Bayrak yazma başarısız, tekrar deneniyor...");
+            EEPROM.writeByte(0, EEPROM_INITIALIZED_FLAG);
+            EEPROM.writeByte(1023, EEPROM_INITIALIZED_FLAG);
+            EEPROM.commit();
+        }
         
         if (strlen(tempSsid) > 0 && strlen(tempSsid) < 32) {
             EEPROM.writeBytes(1, tempSsid, strlen(tempSsid) + 1);
             EEPROM.writeBytes(33, tempPassword, strlen(tempPassword) + 1);
             EEPROM.writeBytes(97, tempCustomName, strlen(tempCustomName) + 1);
+            EEPROM.commit();
             Serial.printf("initEEPROM: Ayarlar korundu - SSID=%s, CustomName=%s\n", tempSsid, tempCustomName);
         }
-        EEPROM.commit();
-        Serial.println("initEEPROM: EEPROM sıfırlandı ve ayarlar korundu.");
+        Serial.println("initEEPROM: EEPROM sıfırlandı ve bayraklar yazıldı.");
     } else {
         Serial.println("initEEPROM: EEPROM zaten başlatılmış.");
-        if (flag1 != EEPROM_INITIALIZED_FLAG || flag2 != EEPROM_INITIALIZED_FLAG) {
-            EEPROM.writeByte(0, EEPROM_INITIALIZED_FLAG);
-            EEPROM.writeByte(1023, EEPROM_INITIALIZED_FLAG);
-            EEPROM.commit();
-        }
     }
 }
 
 void setup() {
     Serial.begin(115200);
-    EEPROM.begin(1024); // Boyutu 1024'e çıkardık
+    EEPROM.begin(1024);
     vTaskDelay(pdMS_TO_TICKS(100));
     initEEPROM();
     
@@ -208,13 +215,14 @@ void checkTouchButton() {
 void loop() {
     static unsigned long lastWiFiCheck = 0;
     static bool reconnecting = false;
+    static unsigned long lastAPCheck = 0;
     
     if (strlen(ssid) > 0 && WiFi.status() != WL_CONNECTED && !isScanning) {
         if (millis() - lastWiFiCheck > 30000 && !reconnecting) {
             Serial.printf("loop: WiFi durumu: %d, SSID: %s\n", WiFi.status(), ssid);
             Serial.println("loop: WiFi bağlantısı koptu, yeniden bağlanılıyor...");
             WiFi.disconnect();
-            vTaskDelay(pdMS_TO_TICKS(1000)); // Daha güvenli gecikme
+            vTaskDelay(pdMS_TO_TICKS(1000));
             WiFi.begin(ssid, password);
             reconnecting = true;
             lastWiFiCheck = millis();
@@ -227,9 +235,10 @@ void loop() {
         lastWiFiCheck = millis();
     }
     
-    if (WiFi.softAPgetStationNum() == 0 && strlen(ssid) == 0) {
+    if (WiFi.softAPgetStationNum() == 0 && strlen(ssid) == 0 && millis() - lastAPCheck > 30000) {
         Serial.println("loop: AP'ye bağlı cihaz yok, AP yeniden başlatılıyor...");
         WiFi.softAP(default_ssid, default_password);
+        lastAPCheck = millis();
     }
     
     dnsServer.processNextRequest();
@@ -442,9 +451,20 @@ void readSettings() {
     EEPROM.readBytes(122, &turnDuration, sizeof(turnDuration));
     EEPROM.readBytes(126, &direction, sizeof(direction));
     
+    // Varsayılan motor ayarları (ilk yüklemede sıfır olmaması için)
+    if (turnsPerDay <= 0 || turnsPerDay > 1200) turnsPerDay = 900;
+    if (turnDuration <= 0.0 || turnDuration > 15.0) turnDuration = 10.0;
+    if (direction < 1 || direction > 3) direction = 3;
+    
     calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
+    calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
     Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms, SSID='%s', Password='%s', CustomName='%s', SSID Uzunluk=%d\n",
                   turnsPerDay, turnDuration, direction, calculatedStepDelay, ssid, password, custom_name, strlen(ssid));
+    
+    // Varsayılan ayarları kaydet
+    if (turnsPerDay == 900 || turnDuration == 10.0 || direction == 3) {
+        writeMotorSettings();
+    }
 }
 
 void writeMotorSettings() {
@@ -454,8 +474,11 @@ void writeMotorSettings() {
     EEPROM.put(address, turnDuration);
     address += sizeof(turnDuration);
     EEPROM.put(address, direction);
-    EEPROM.commit();
-    Serial.printf("writeMotorSettings: TPD=%d, Duration=%.2f, Direction=%d\n", turnsPerDay, turnDuration, direction);
+    if (EEPROM.commit()) {
+        Serial.printf("writeMotorSettings: TPD=%d, Duration=%.2f, Direction=%d kaydedildi.\n", turnsPerDay, turnDuration, direction);
+    } else {
+        Serial.println("writeMotorSettings: EEPROM yazma başarısız!");
+    }
 }
 
 void writeWiFiSettings() {
@@ -479,8 +502,11 @@ void writeWiFiSettings() {
     EEPROM.writeString(1, ssid);
     EEPROM.writeString(33, password);
     EEPROM.writeString(97, custom_name);
-    EEPROM.commit();
-    Serial.printf("writeWiFiSettings: SSID='%s', Password='%s', CustomName='%s' kaydedildi.\n", ssid, password, custom_name);
+    if (EEPROM.commit()) {
+        Serial.printf("writeWiFiSettings: SSID='%s', Password='%s', CustomName='%s' kaydedildi.\n", ssid, password, custom_name);
+    } else {
+        Serial.println("writeWiFiSettings: EEPROM yazma başarısız!");
+    }
 }
 
 void setupWiFi() {
@@ -768,13 +794,13 @@ void handleScan() {
     Serial.println("handleScan: Ağ taraması başlatılıyor (sync)...");
     Serial.printf("handleScan: WiFi durumu: %d\n", WiFi.status());
     
-    WiFi.disconnect(); // Modülü sıfırla
+    WiFi.disconnect();
     vTaskDelay(pdMS_TO_TICKS(500));
     WiFi.mode(WIFI_AP_STA);
     int networksFound = WiFi.scanNetworks();
     
     if (networksFound == WIFI_SCAN_FAILED) {
-        Serial.println("handleScan: Tarama başarısız. WiFi durumu: " + String(WiFi.status()));
+        Serial.printf("handleScan: Tarama başarısız, WiFi durumu: %d, Hata kodu: %d\n", WiFi.status(), esp_wifi_scan_get_ap_num());
         server.send(200, "application/json", "{\"status\":\"Scan failed\"}");
         isScanning = false;
         return;
@@ -799,6 +825,7 @@ void handleScan() {
         }
         network["ssid"] = WiFi.SSID(i);
         network["rssi"] = WiFi.RSSI(i);
+        Serial.printf("handleScan: SSID=%s, RSSI=%d\n", WiFi.SSID(i).c_str(), WiFi.RSSI(i));
     }
     
     String response;
@@ -1032,7 +1059,7 @@ void checkOTAUpdateTask(void *parameter) {
                             return;
                         }
                         http.begin(filesystemUrl);
-                        httpCodeBin = http.GET();
+                        int httpCodeBin = http.GET();
                         if (httpCodeBin == HTTP_CODE_OK) {
                             WiFiClient *client = http.getStreamPtr();
                             size_t written = Update.writeStream(*client);
@@ -1056,9 +1083,18 @@ void checkOTAUpdateTask(void *parameter) {
                         Serial.println("Filesystem update finished. Rebooting...");
                         writeWiFiSettings();
                         writeMotorSettings();
+                        // EEPROM yazma işlemini doğrula
+                        char verifySsid[32];
+                        EEPROM.readString(1, verifySsid, sizeof(verifySsid));
+                        if (strcmp(verifySsid, ssid) != 0) {
+                            Serial.println("checkOTAUpdateTask: EEPROM yazma doğrulaması başarısız, tekrar yazılıyor...");
+                            writeWiFiSettings();
+                        }
                         ESP.restart();
                     } else {
                         Serial.println("No filesystem.bin found, rebooting after firmware update.");
+                        writeWiFiSettings();
+                        writeMotorSettings();
                         ESP.restart();
                     }
                 } else {
