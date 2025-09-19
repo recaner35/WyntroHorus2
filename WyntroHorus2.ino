@@ -44,7 +44,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.76";
+const char* FIRMWARE_VERSION = "v1.0.77";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
