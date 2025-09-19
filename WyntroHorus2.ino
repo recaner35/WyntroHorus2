@@ -110,34 +110,49 @@ void checkOTAUpdateTask(void *parameter);
 String sanitizeString(String input);
 
 void initEEPROM() {
-  uint8_t flag;
-  EEPROM.readBytes(0, &flag, 1);
-  if (flag != EEPROM_INITIALIZED_FLAG) {
+  uint8_t flag1, flag2; // Çift bayrak için yedekleme
+  EEPROM.readBytes(0, &flag1, 1);
+  EEPROM.readBytes(512-1, &flag2, 1); // EEPROM sonuna yedek bayrak
+    
+  bool initialized = (flag1 == EEPROM_INITIALIZED_FLAG) || (flag2 == EEPROM_INITIALIZED_FLAG);
+    
+  if (!initialized) {
     Serial.println("initEEPROM: EEPROM başlatılmamış, sıfırlanıyor...");
-    // Mevcut ayarları oku (eğer varsa)
-    char tempSsid[32] = "";
-    char tempPassword[64] = "";
-    char tempCustomName[21] = "";
-    EEPROM.readBytes(1, tempSsid, sizeof(tempSsid));
-    EEPROM.readBytes(33, tempPassword, sizeof(tempPassword));
-    EEPROM.readBytes(97, tempCustomName, sizeof(tempCustomName));
-
-    // EEPROM'u sıfırla
-    for (int i = 0; i < 512; i++) {
+        
+    // Mevcut ayarları oku (bozuk olsa bile)
+    char tempSsid[32] = {0}; // Null-terminated
+    char tempPassword[64] = {0};
+    char tempCustomName[21] = {0};
+    EEPROM.readBytes(1, tempSsid, 31); // 1 byte az oku, null için yer bırak
+    tempSsid[31] = '\0'; // Null terminate et
+    EEPROM.readBytes(33, tempPassword, 63);
+    tempPassword[63] = '\0';
+    EEPROM.readBytes(97, tempCustomName, 20);
+    tempCustomName[20] = '\0';
+        
+    // EEPROM'u sıfırla (1024 byte'a çıkar)
+    for (int i = 0; i < 1024; i++) {
       EEPROM.writeByte(i, 0);
     }
-      EEPROM.writeByte(0, EEPROM_INITIALIZED_FLAG);
-
-    // Önceki ayarları geri yaz (eğer geçerliyse)
-    if (strlen(tempSsid) > 0) {
-      EEPROM.writeBytes(1, tempSsid, sizeof(tempSsid));
-      EEPROM.writeBytes(33, tempPassword, sizeof(tempPassword));
-      EEPROM.writeBytes(97, tempCustomName, sizeof(tempCustomName));
+    EEPROM.writeByte(0, EEPROM_INITIALIZED_FLAG);
+    EEPROM.writeByte(1023, EEPROM_INITIALIZED_FLAG); // Yedek bayrak
+        
+    // Geçerli ayarları geri yaz (boş değilse)
+    if (strlen(tempSsid) > 0 && strlen(tempSsid) < 32) {
+      EEPROM.writeBytes(1, tempSsid, strlen(tempSsid) + 1); // Null dahil yaz
+      EEPROM.writeBytes(33, tempPassword, strlen(tempPassword) + 1);
+      EEPROM.writeBytes(97, tempCustomName, strlen(tempCustomName) + 1);
+      Serial.printf("initEEPROM: Ayarlar korundu - SSID=%s, CustomName=%s\n", tempSsid, tempCustomName);
     }
-      EEPROM.commit();
-      Serial.println("initEEPROM: EEPROM sıfırlandı, mevcut ayarlar korundu.");
+    EEPROM.commit();
+    Serial.println("initEEPROM: EEPROM sıfırlandı ve ayarlar korundu.");
   } else {
       Serial.println("initEEPROM: EEPROM zaten başlatılmış.");
+      // Bayrakları senkronize et
+      if (flag1 != EEPROM_INITIALIZED_FLAG) {
+        EEPROM.writeByte(0, EEPROM_INITIALIZED_FLAG);
+      EEPROM.commit();
+      }
   }
 }
 
