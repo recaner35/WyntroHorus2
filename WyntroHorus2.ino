@@ -80,6 +80,7 @@ uint8_t baseMac[6];
 char mac_suffix[5];
 const uint8_t EEPROM_INITIALIZED_FLAG = 0xAA;
 StaticJsonDocument<4096> scanDoc;
+bool isScanning = false;
 
 // Function prototypes
 void readSettings();
@@ -225,7 +226,7 @@ void loop() {
   static unsigned long lastWiFiCheck = 0;
   static bool reconnecting = false; // Yeniden bağlantı durumunu takip et
     
-  if (strlen(ssid) > 0 && WiFi.status() != WL_CONNECTED) {
+  if (strlen(ssid) > 0 && WiFi.status() != WL_CONNECTED && !isScanning) { // Koşula !isScanning eklendi
     if (millis() - lastWiFiCheck > 30000 && !reconnecting) {
         Serial.println("loop: WiFi bağlantısı koptu, yeniden bağlanılıyor...");
         WiFi.disconnect(); // Mevcut bağlantıyı temizle
@@ -809,30 +810,27 @@ void handleSaveWiFi() {
 }
 
 void handleScan() {
+  isScanning = true; // Tarama başlangıcı
   Serial.println("handleScan: Ağ taraması başlatılıyor (sync)...");
     
-  WiFi.mode(WIFI_AP_STA); // Hem AP hem STA modunda çalış
+  WiFi.mode(WIFI_AP_STA);
   int networksFound = WiFi.scanNetworks();
-    
+  
   if (networksFound == WIFI_SCAN_FAILED) {
     Serial.println("handleScan: Tarama başarısız.");
     server.send(200, "application/json", "{\"status\":\"Scan failed\"}");
-      return;
+    isScanning = false; // Tarama sonu (hata durumu)
+    return;
   }
     
   Serial.printf("handleScan: Bulunan ağlar: %d\n", networksFound);
     
-  // Her bir SSID ve RSSI değerini logla
-  for (int i = 0; i < networksFound; i++) {
-    Serial.println("SSID: " + WiFi.SSID(i) + ", RSSI: " + String(WiFi.RSSI(i)));
-  }
-    
-  // JSON oluştur
   scanDoc.clear();
   JsonArray networks = scanDoc.createNestedArray("networks");
   if (!networks) {
     Serial.println("handleScan: JsonArray oluşturma başarısız!");
     server.send(200, "application/json", "{\"status\":\"JSON array creation failed\"}");
+    isScanning = false; // Tarama sonu (hata durumu)
     return;
   }
     
@@ -849,10 +847,11 @@ void handleScan() {
   String response;
   serializeJson(scanDoc, response);
   Serial.println("handleScan: Gönderilen JSON: " + response);
-  server.sendHeader("Access-Control-Allow-Origin", "*"); // CORS için
+  server.sendHeader("Access-Control-Allow-Origin", "*");
   server.send(200, "application/json", response);
     
-  WiFi.scanDelete(); // Hafızayı temizle
+  WiFi.scanDelete();
+  isScanning = false; // Tarama sonu (başarılı durum)
 }
 
 void handleStatus() {
