@@ -115,6 +115,7 @@ void setupWebServer();
 void handleSet();
 void handleScan();
 void handleSaveWiFi();
+void handleRemoveOtherHorus();
 void handleStatus();
 void handleManualUpdate();
 void stopMotor();
@@ -697,6 +698,8 @@ void setupWebServer() {
             server.send(200, "text/plain", "Error: Invalid mDNS name.");
         }
     });
+
+    server.on("/remove_other_horus", HTTP_POST, handleRemoveOtherHorus);
     
     server.on("/status", HTTP_GET, handleStatus);
     
@@ -772,6 +775,38 @@ void handleSet() {
     }
     updateWebSocket();
     server.send(200, "text/plain", "OK");
+}
+
+void handleRemoveOtherHorus() {
+    if (!server.hasArg("mdns_name")) {
+        server.send(400, "text/plain", "Hata: Cihaz adı eksik.");
+        return;
+    }
+    String mdnsNameToRemove = server.arg("mdns_name");
+    bool found = false;
+    int removeIndex = -1;
+
+    for (int i = 0; i < otherHorusCount; i++) {
+        if (strcmp(otherHorusList[i], mdnsNameToRemove.c_str()) == 0) {
+            found = true;
+            removeIndex = i;
+            break;
+        }
+    }
+
+    if (found) {
+        Serial.printf("handleRemoveOtherHorus: Cihaz kaldırılıyor: %s\n", mdnsNameToRemove.c_str());
+        // Bulunan elemandan sonraki elemanları bir üste kaydır
+        for (int i = removeIndex; i < otherHorusCount - 1; i++) {
+            strncpy(otherHorusList[i], otherHorusList[i + 1], 31);
+        }
+        otherHorusCount--;
+        saveOtherHorusList(); // Değişikliği kaydet
+        server.send(200, "text/plain", "OK");
+        updateWebSocket(); // Tüm arayüzleri güncelle
+    } else {
+        server.send(404, "text/plain", "Hata: Cihaz bulunamadı.");
+    }
 }
 
 void handleSaveWiFi() {
