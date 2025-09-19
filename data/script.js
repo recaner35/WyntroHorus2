@@ -1231,6 +1231,7 @@ function renderOtherHorusList(devices) {
                 <button class="button primary" onclick="controlOtherHorus('${device}', 'start')">${getTranslation('startButton')}</button>
                 <button class="button secondary" onclick="controlOtherHorus('${device}', 'stop')">${getTranslation('stopButton')}</button>
                 <button class="button secondary" onclick="controlOtherHorus('${device}', 'reset')">${getTranslation('resetButton')}</button>
+                <button class="button danger" onclick="removeOtherHorus('${device}')">${getTranslation('removeButton')}</button>
             </div>
         `;
         listContainer.appendChild(item);
@@ -1445,6 +1446,7 @@ function uploadFirmware() {
     });
 
 }
+
 
 
 
