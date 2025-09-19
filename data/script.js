@@ -1342,25 +1342,32 @@ function scanNetworks() {
     const originalText = scanButton.innerText;
     scanButton.innerText = getTranslation('scanningNetworks');
     scanButton.disabled = true;
+    
     fetch('/scan')
-        .then(response => response.json()) // Yanıtın JSON formatında olduğunu belirtir
+        .then(response => {
+            console.log('Scan response status:', response.status); // HTTP durum kodunu logla
+            return response.json(); // JSON'a çevir
+        })
         .then(data => {
+            console.log('Scan response data:', data); // Gelen JSON verisini logla
             const select = document.getElementById('ssidSelect');
-            select.innerHTML = ''; // Önceki listeyi temizler
-            if (data.networks) {
-                // Bulunan her ağ için bir 'option' elementi oluşturur
+            select.innerHTML = ''; // Önceki listeyi temizle
+            if (data.networks && Array.isArray(data.networks)) {
                 data.networks.forEach(net => {
                     const option = document.createElement('option');
                     option.value = net.ssid;
                     option.innerText = `${net.ssid} (${net.rssi})`;
                     select.appendChild(option);
                 });
+                console.log('Dropdown updated with', data.networks.length, 'networks'); // Güncelleme logu
+            } else {
+                console.error('No networks found or invalid response:', data); // Hata logu
             }
             scanButton.innerText = originalText;
             scanButton.disabled = false;
         })
         .catch(error => {
-            console.error('Hata:', error);
+            console.error('Scan error:', error); // Hata logu
             scanButton.innerText = originalText;
             scanButton.disabled = false;
         });
@@ -1438,6 +1445,7 @@ function uploadFirmware() {
     });
 
 }
+
 
 
 
