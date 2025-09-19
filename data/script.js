@@ -1202,8 +1202,7 @@ function connectWebSocket() {
     
     ws.onmessage = function(event) {
         console.log('Message received:', event.data);
-        const data = JSON.parse(event.data);
-        updateStatus(data);
+        handleMessage(event.data);
     };
     
     ws.onclose = function() {
@@ -1446,6 +1445,7 @@ function uploadFirmware() {
     });
 
 }
+
 
 
 
