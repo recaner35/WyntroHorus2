@@ -1262,6 +1262,27 @@ function addOtherHorus() {
     });
 }
 
+function removeOtherHorus(mdnsName) {
+    if (!confirm(getTranslation('alertRemoveDeviceConfirm') + mdnsName + '.local')) {
+        return;
+    }
+    fetch('/remove_other_horus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `mdns_name=${encodeURIComponent(mdnsName)}`
+    })
+    .then(response => {
+        if (!response.ok) {
+            alert(getTranslation('alertDeviceRemoveError'));
+        }
+        // Arayüz WebSocket üzerinden otomatik güncellenecektir.
+    })
+    .catch(error => {
+        console.error('Remove device error:', error);
+        alert(getTranslation('alertDeviceRemoveError'));
+    });
+}
+
 function controlOtherHorus(mdnsName, action) {
     console.log(`Sending ${action} command to ${mdnsName}...`);
     fetch(`http://${mdnsName}.local/set?action=${action}`)
@@ -1446,6 +1467,7 @@ function uploadFirmware() {
     });
 
 }
+
 
 
 
