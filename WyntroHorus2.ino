@@ -761,70 +761,50 @@ void handleSaveWiFi() {
 }
 
 void handleScan() {
-    Serial.println("handleScan: Ağ taraması başlatılıyor (sync)...");
+  Serial.println("handleScan: Ağ taraması başlatılıyor (sync)...");
     
-    // Mevcut WiFi modunu koru, sadece STA ekle
-    WiFi.mode(WIFI_AP_STA); // Hem AP hem STA modunda çalış
-    int networksFound = WiFi.scanNetworks();
+  WiFi.mode(WIFI_AP_STA); // Hem AP hem STA modunda çalış
+  int networksFound = WiFi.scanNetworks();
     
-    if (networksFound == WIFI_SCAN_FAILED) {
-        Serial.println("handleScan: Tarama başarısız.");
-        server.send(200, "application/json", "{\"status\":\"Scan failed\"}");
-        return;
+  if (networksFound == WIFI_SCAN_FAILED) {
+    Serial.println("handleScan: Tarama başarısız.");
+    server.send(200, "application/json", "{\"status\":\"Scan failed\"}");
+      return;
+  }
+    
+  Serial.printf("handleScan: Bulunan ağlar: %d\n", networksFound);
+    
+  // Her bir SSID ve RSSI değerini logla
+  for (int i = 0; i < networksFound; i++) {
+    Serial.println("SSID: " + WiFi.SSID(i) + ", RSSI: " + String(WiFi.RSSI(i)));
+  }
+    
+  // JSON oluştur
+  scanDoc.clear();
+  JsonArray networks = scanDoc.createNestedArray("networks");
+  if (!networks) {
+    Serial.println("handleScan: JsonArray oluşturma başarısız!");
+    server.send(200, "application/json", "{\"status\":\"JSON array creation failed\"}");
+    return;
+  }
+    
+  for (int i = 0; i < networksFound; i++) {
+    JsonObject network = networks.createNestedObject();
+    if (!network) {
+      Serial.println("handleScan: JsonObject oluşturma başarısız!");
+      continue;
     }
+    network["ssid"] = WiFi.SSID(i);
+    network["rssi"] = WiFi.RSSI(i);
+  }
     
-    Serial.printf("handleScan: Bulunan ağlar: %d\n", networksFound);
+  String response;
+  serializeJson(scanDoc, response);
+  Serial.println("handleScan: Gönderilen JSON: " + response);
+  server.sendHeader("Access-Control-Allow-Origin", "*"); // CORS için
+  server.send(200, "application/json", response);
     
-    // Her bir SSID ve RSSI değerini logla
-    for (int i = 0; i < networksFound; i++) {
-        Serial.println("SSID: " + WiFi.SSID(i) + ", RSSI: " + String(WiFi.RSSI(i)));
-    }
-    
-    // JSON oluştur
-    scanDoc.clear();
-    JsonArray networks = scanDoc.createNestedArray("networks");
-    if (!networks) {
-        Serial.println("handleScan: JsonArray oluşturma başarısız!");
-        server.send(200, "application/json", "{\"status\":\"JSON array creation failed\"}");
-        return;
-    }
-    
-    for (int i = 0; i < networksFound; i++) {
-        JsonObject network = networks.createNestedObject();
-        if (!network) {
-            Serial.println("handleScan: JsonObject oluşturma başarısız!");
-            continue;
-        }
-        network["ssid"] = WiFi.SSID(i);
-        network["rssi"] = WiFi.RSSI(i);
-    }
-    
-    String response;
-    serializeJson(scanDoc, response);
-    Serial.println("handleScan: Gönderilen JSON: " + response);
-    server.sendHeader("Access-Control-Allow-Origin", "*"); // CORS için
-    server.send(200, "application/json", response);
-    
-    WiFi.scanDelete(); // Hafızayı temizle
-}
-    
-    for (int i = 0; i < networksFound; i++) {
-        JsonObject network = networks.createNestedObject();
-        if (!network) {
-            Serial.println("handleScan: JsonObject oluşturma başarısız!");
-            continue;
-        }
-        network["ssid"] = WiFi.SSID(i);
-        network["rssi"] = WiFi.RSSI(i);
-    }
-    
-    String response;
-    serializeJson(scanDoc, response);
-    Serial.println("handleScan: Gönderilen JSON: " + response);
-    server.sendHeader("Access-Control-Allow-Origin", "*"); // CORS için
-    server.send(200, "application/json", response);
-    
-    WiFi.scanDelete(); // Hafızayı temizle
+  WiFi.scanDelete(); // Hafızayı temizle
 }
 
 void handleStatus() {
