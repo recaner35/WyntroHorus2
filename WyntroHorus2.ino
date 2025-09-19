@@ -223,16 +223,36 @@ void checkTouchButton() {
 
 void loop() {
   static unsigned long lastWiFiCheck = 0;
-  if (strlen(ssid) > 0 && WiFi.status() != WL_CONNECTED && millis() - lastWiFiCheck > 30000) {
-    Serial.println("loop: WiFi bağlantısı koptu, yeniden bağlanılıyor...");
-    WiFi.begin(ssid, password);
+  static bool reconnecting = false; // Yeniden bağlantı durumunu takip et
+    
+  if (strlen(ssid) > 0 && WiFi.status() != WL_CONNECTED) {
+    if (millis() - lastWiFiCheck > 30000 && !reconnecting) {
+        Serial.println("loop: WiFi bağlantısı koptu, yeniden bağlanılıyor...");
+        WiFi.disconnect(); // Mevcut bağlantıyı temizle
+        delay(1000);
+        WiFi.begin(ssid, password);
+        reconnecting = true;
+        lastWiFiCheck = millis();
+    } else if (WiFi.status() == WL_CONNECTED) {
+        reconnecting = false; // Başarılıysa flag'i sıfırla
+        Serial.println("loop: WiFi bağlantısı yeniden kuruldu.");
+    }
+  } else {
+    reconnecting = false;
     lastWiFiCheck = millis();
   }
-  dnsServer.processNextRequest();
-  server.handleClient();
-  webSocket.loop();
-  checkHourlyReset();
-  checkTouchButton();
+    
+    // AP kontrolü (eğer STA başarısızsa AP'yi koru)
+    if (WiFi.softAPgetStationNum() == 0 && strlen(ssid) == 0) {
+      Serial.println("loop: AP'ye bağlı cihaz yok, AP yeniden başlatılıyor...");
+      WiFi.softAP(default_ssid, default_password);
+    }
+    
+    dnsServer.processNextRequest();
+    server.handleClient();
+    webSocket.loop();
+    checkHourlyReset();
+    checkTouchButton();
 }
 
 String sanitizeString(String input) {
