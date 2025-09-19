@@ -64,7 +64,10 @@ const translations = {
         scanningNetworks: 'Taranıyor...',
         otaChecking: 'Güncelleme kontrol ediliyor...',
         otaErrorConnect: 'Hata: Sunucuya bağlanılamadı.',
-        noOtherDevices: 'Henüz başka cihaz eklenmemiş.'
+        noOtherDevices: 'Henüz başka cihaz eklenmemiş.',
+        removeButton: 'Kaldır',
+        alertRemoveDeviceConfirm: 'Bu cihazı kaldırmak istediğinizden emin misiniz? Cihaz: ',
+        alertDeviceRemoveError: 'Cihaz kaldırılırken bir hata oluştu.'
     },
     'en': {
         motorStatusLabel: 'Motor Status',
@@ -127,7 +130,10 @@ const translations = {
         scanningNetworks: 'Scanning...',
         otaChecking: 'Checking for update...',
         otaErrorConnect: 'Error: Could not connect to the server.',
-        noOtherDevices: 'No other devices have been added yet.'
+        noOtherDevices: 'No other devices have been added yet.',
+        removeButton: 'Remove',
+        alertRemoveDeviceConfirm: 'Are you sure you want to remove this device? Device: ',
+        alertDeviceRemoveError: 'An error occurred while removing the device.'
     },
     'de': {
         motorStatusLabel: 'Motorstatus',
@@ -190,7 +196,10 @@ const translations = {
         scanningNetworks: 'Scannen...',
         otaChecking: 'Suche nach Updates...',
         otaErrorConnect: 'Fehler: Verbindung zum Server konnte nicht hergestellt werden.',
-        noOtherDevices: 'Es wurden noch keine anderen Geräte hinzugefügt.'
+        noOtherDevices: 'Es wurden noch keine anderen Geräte hinzugefügt.',
+        removeButton: 'Entfernen',
+        alertRemoveDeviceConfirm: 'Sind Sie sicher, dass Sie dieses Gerät entfernen möchten? Gerät: ',
+        alertDeviceRemoveError: 'Beim Entfernen des Geräts ist ein Fehler aufgetreten.'
     },
     'fr': {
         motorStatusLabel: 'État du Moteur',
@@ -253,7 +262,10 @@ const translations = {
         scanningNetworks: 'Balayage...',
         otaChecking: 'Vérification de la mise à jour...',
         otaErrorConnect: 'Erreur : Impossible de se connecter au serveur.',
-        noOtherDevices: 'Aucun autre appareil n\'a encore été ajouté.'
+        noOtherDevices: 'Aucun autre appareil n\'a encore été ajouté.',
+        removeButton: 'Supprimer',
+        alertRemoveDeviceConfirm: 'Voulez-vous vraiment supprimer cet appareil? Appareil: ',
+        alertDeviceRemoveError: 'Une erreur s\'est produite lors de la suppression de l\'appareil.'
     },
     'it': {
         motorStatusLabel: 'Stato Motore',
@@ -316,7 +328,10 @@ const translations = {
         scanningNetworks: 'Scansione...',
         otaChecking: 'Controllo aggiornamenti...',
         otaErrorConnect: 'Errore: Impossibile connettersi al server.',
-        noOtherDevices: 'Nessun altro dispositivo è stato ancora aggiunto.'
+        noOtherDevices: 'Nessun altro dispositivo è stato ancora aggiunto.',
+        removeButton: 'Rimuovi',
+        alertRemoveDeviceConfirm: 'Sei sicuro di voler rimuovere questo dispositivo? Dispositivo: ',
+        alertDeviceRemoveError: 'Si è verificato un errore durante la rimozione del dispositivo.'
     },
     'es': {
         motorStatusLabel: 'Estado del Motor',
@@ -379,7 +394,10 @@ const translations = {
         scanningNetworks: 'Escaneando...',
         otaChecking: 'Buscando actualizaciones...',
         otaErrorConnect: 'Error: No se pudo conectar al servidor.',
-        noOtherDevices: 'Aún no se han agregado otros dispositivos.'
+        noOtherDevices: 'Aún no se han agregado otros dispositivos.',
+        removeButton: 'Eliminar',
+        alertRemoveDeviceConfirm: '¿Está seguro de que desea eliminar este dispositivo? Dispositivo: ',
+        alertDeviceRemoveError: 'Ocurrió un error al eliminar el dispositivo.'
     },
     'zh-CN': {
         motorStatusLabel: '电机状态',
@@ -442,7 +460,10 @@ const translations = {
         scanningNetworks: '扫描中...',
         otaChecking: '正在检查更新...',
         otaErrorConnect: '错误：无法连接到服务器。',
-        noOtherDevices: '尚未添加其他设备。'
+        noOtherDevices: '尚未添加其他设备。',
+        removeButton: '删除',
+        alertRemoveDeviceConfirm: '您确定要删除此设备吗？ 设备：',
+        alertDeviceRemoveError: '删除设备时出错。'
     },
     'ja': {
         motorStatusLabel: 'モーター状態',
@@ -505,7 +526,10 @@ const translations = {
         scanningNetworks: 'スキャン中...',
         otaChecking: '更新を確認しています...',
         otaErrorConnect: 'エラー：サーバーに接続できませんでした。',
-        noOtherDevices: '他のデバイスはまだ追加されていません。'
+        noOtherDevices: '他のデバイスはまだ追加されていません。',
+        removeButton: '削除',
+        alertRemoveDeviceConfirm: 'このデバイスを削除してもよろしいですか？ デバイス：',
+        alertDeviceRemoveError: 'デバイスの削除中にエラーが発生しました。'
     },
     'rm': {
         motorStatusLabel: 'Stadi dal motor',
@@ -568,7 +592,10 @@ const translations = {
         scanningNetworks: 'Tschertgar...',
         otaChecking: 'Controllar actualisaziuns...',
         otaErrorConnect: 'Errur: Na possì betg connectar al server.',
-        noOtherDevices: 'Anc nagins auters apparats agiuntads.'
+        noOtherDevices: 'Anc nagins auters apparats agiuntads.',
+        removeButton: 'Allontanar',
+        alertRemoveDeviceConfirm: 'Es Vus segir da vulair allontanar quest apparat? Apparat: ',
+        alertDeviceRemoveError: 'In\'errur è capitada durant l\'allontanament da l\'apparat.'
     },
     'mk': {
         motorStatusLabel: 'Статус на моторот',
@@ -631,7 +658,10 @@ const translations = {
         scanningNetworks: 'Скенирање...',
         otaChecking: 'Проверка за ажурирање...',
         otaErrorConnect: 'Грешка: Не може да се поврзе со серверот.',
-        noOtherDevices: 'Сè уште не се додадени други уреди.'
+        noOtherDevices: 'Сè уште не се додадени други уреди.',
+        removeButton: 'Отстрани',
+        alertRemoveDeviceConfirm: 'Дали сте сигурни дека сакате да го отстраните овој уред? Уред: ',
+        alertDeviceRemoveError: 'Настана грешка при отстранување на уредот.'
     },
     'sq': {
         motorStatusLabel: 'Statusi i Motorit',
@@ -694,7 +724,10 @@ const translations = {
         scanningNetworks: 'Duke skanuar...',
         otaChecking: 'Duke kontrolluar për përditësim...',
         otaErrorConnect: 'Gabim: Nuk mund të lidhej me serverin.',
-        noOtherDevices: 'Asnjë pajisje tjetër nuk është shtuar ende.'
+        noOtherDevices: 'Asnjë pajisje tjetër nuk është shtuar ende.',
+        removeButton: 'Hiqe',
+        alertRemoveDeviceConfirm: 'A jeni i sigurt që doni ta hiqni këtë pajisje? Pajisja: ',
+        alertDeviceRemoveError: 'Një gabim ndodhi gjatë heqjes së pajisjes.'
     },
     'bs': {
         motorStatusLabel: 'Status Motora',
@@ -757,7 +790,10 @@ const translations = {
         scanningNetworks: 'Skeniranje...',
         otaChecking: 'Provjera ažuriranja...',
         otaErrorConnect: 'Greška: Nije moguće povezati se na server.',
-        noOtherDevices: 'Još uvijek nema dodanih drugih uređaja.'
+        noOtherDevices: 'Još uvijek nema dodanih drugih uređaja.',
+        removeButton: 'Ukloni',
+        alertRemoveDeviceConfirm: 'Da li ste sigurni da želite ukloniti ovaj uređaj? Uređaj: ',
+        alertDeviceRemoveError: 'Došlo je do greške prilikom uklanjanja uređaja.'
     },
     'sr': {
         motorStatusLabel: 'Status Motora',
@@ -820,7 +856,10 @@ const translations = {
         scanningNetworks: 'Skeniranje...',
         otaChecking: 'Provera ažuriranja...',
         otaErrorConnect: 'Greška: Nije moguće povezati se na server.',
-        noOtherDevices: 'Još uvek nema dodatih drugih uređaja.'
+        noOtherDevices: 'Još uvek nema dodatih drugih uređaja.',
+        removeButton: 'Ukloni',
+        alertRemoveDeviceConfirm: 'Da li ste sigurni da želite da uklonite ovaj uređaj? Uređaj: ',
+        alertDeviceRemoveError: 'Došlo je do greške prilikom uklanjanja uređaja.'
     },
     'rup': {
         motorStatusLabel: 'Starea a Motorlui',
@@ -883,7 +922,10 @@ const translations = {
         scanningNetworks: 'Scanari...',
         otaChecking: 'Căutari noutati...',
         otaErrorConnect: 'Eroare: Nu s-a putut conecta la server.',
-        noOtherDevices: 'Nu s-au adăugat încă alte aparate.'
+        noOtherDevices: 'Nu s-au adăugat încă alte aparate.',
+        removeButton: 'Ștergi',
+        alertRemoveDeviceConfirm: 'Hi sigur că vrei s-ștergi aestu aparat? Aparat: ',
+        alertDeviceRemoveError: 'S-featse ună greșeală la șterdzerea a aparatului.'
     },
     'rom': {
         motorStatusLabel: 'Motorosko Statuso',
@@ -946,7 +988,10 @@ const translations = {
         scanningNetworks: 'Skeniripe...',
         otaChecking: 'Dikhipe nevipasko...',
         otaErrorConnect: 'Greska: Nashti povezime pe servero.',
-        noOtherDevices: 'Nane aver masinki dodajime.'
+        noOtherDevices: 'Nane aver masinki dodajime.',
+        removeButton: 'Kidel',
+        alertRemoveDeviceConfirm: 'Sigur san ke kames te kides kado masina? Masina: ',
+        alertDeviceRemoveError: 'Greška kerdili kana kidasas e masina.'
     },
     'az': {
         motorStatusLabel: 'Motor Vəziyyəti',
@@ -1009,7 +1054,10 @@ const translations = {
         scanningNetworks: 'Taranır...',
         otaChecking: 'Yeniləmə yoxlanılır...',
         otaErrorConnect: 'Xəta: Serverə qoşulmaq mümkün olmadı.',
-        noOtherDevices: 'Hələ başqa cihaz əlavə edilməyib.'
+        noOtherDevices: 'Hələ başqa cihaz əlavə edilməyib.',
+        removeButton: 'Sil',
+        alertRemoveDeviceConfirm: 'Bu cihazı silmək istədiyinizə əminsinizmi? Cihaz: ',
+        alertDeviceRemoveError: 'Cihaz silinərkən xəta baş verdi.'
     },
     'ru': {
          motorStatusLabel: 'Статус Мотора',
@@ -1072,7 +1120,10 @@ const translations = {
          scanningNetworks: 'Сканирование...',
          otaChecking: 'Проверка обновлений...',
          otaErrorConnect: 'Ошибка: Не удалось подключиться к серверу.',
-         noOtherDevices: 'Другие устройства еще не добавлены.'
+         noOtherDevices: 'Другие устройства еще не добавлены.',
+         removeButton: 'Удалить',
+         alertRemoveDeviceConfirm: 'Вы уверены, что хотите удалить это устройство? Устройство: ',
+         alertDeviceRemoveError: 'Произошла ошибка при удалении устройства.'
     }
 };
 
@@ -1467,6 +1518,7 @@ function uploadFirmware() {
     });
 
 }
+
 
 
 
