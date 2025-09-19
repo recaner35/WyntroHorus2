@@ -452,9 +452,9 @@ void readSettings() {
     EEPROM.readBytes(126, &direction, sizeof(direction));
     
     // Varsayılan motor ayarları (ilk yüklemede sıfır olmaması için)
-    if (turnsPerDay <= 0 || turnsPerDay > 1200) turnsPerDay = 900;
-    if (turnDuration <= 0.0 || turnDuration > 15.0) turnDuration = 10.0;
-    if (direction < 1 || direction > 3) direction = 3;
+    if (turnsPerDay <= 0 || turnsPerDay > 1200) turnsPerDay = 600;
+    if (turnDuration <= 0.0 || turnDuration > 15.0) turnDuration = 15.0;
+    if (direction < 1 || direction > 3) direction = 1;
     
     calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
     calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
@@ -462,7 +462,7 @@ void readSettings() {
                   turnsPerDay, turnDuration, direction, calculatedStepDelay, ssid, password, custom_name, strlen(ssid));
     
     // Varsayılan ayarları kaydet
-    if (turnsPerDay == 900 || turnDuration == 10.0 || direction == 3) {
+    if (turnsPerDay == 600 || turnDuration == 15.0 || direction == 1) {
         writeMotorSettings();
     }
 }
@@ -800,7 +800,9 @@ void handleScan() {
     int networksFound = WiFi.scanNetworks();
     
     if (networksFound == WIFI_SCAN_FAILED) {
-        Serial.printf("handleScan: Tarama başarısız, WiFi durumu: %d, Hata kodu: %d\n", WiFi.status(), esp_wifi_scan_get_ap_num());
+        uint16_t apCount = 0;
+        esp_wifi_scan_get_ap_num(&apCount);
+        Serial.printf("handleScan: Tarama başarısız, WiFi durumu: %d, AP sayısı: %d\n", WiFi.status(), apCount);
         server.send(200, "application/json", "{\"status\":\"Scan failed\"}");
         isScanning = false;
         return;
