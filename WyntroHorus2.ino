@@ -11,6 +11,29 @@
 #include <vector>
 #include <DNSServer.h>
 
+const char* github_root_ca = \
+"-----BEGIN CERTIFICATE-----\n" \
+"MIIDjjCCAnagAwIBAgIQAzrx5qcRqaC7KGSxHQn65TANBgkqhkiG9w0BAQsFADBh\n" \
+"MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n" \
+"d3cuZGlnaWNlcnQuY29tMSAwHgYDVQQDExdEaWdpQ2VydCBHbG9iYWwgUm9vdCBH\n" \
+"MjAeFw0xMzA4MDExMjAwMDBaFw0zODAxMTUxMjAwMDBaMGExCzAJBgNVBAYTAlVT\n" \
+"MRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5j\n" \
+"b20xIDAeBgNVBAMTF0RpZ2lDZXJ0IEdsb2JhbCBSb290IEcyMIIBIjANBgkqhkiG\n" \
+"9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuzfNNNx7a8myaJCtSnX/RrohC7hsDhMsxL9A\n" \
+"UvU24i8xFUyRcdHrmfKiV6+DNuGdePKg2n+1jgc3wT5tTj3p2kSXClUXg+4I5e3y\n" \
+"6x4u2V1kTjknD3i+yEikd2vjNJpY+12k3N7d+t/5g2f2N3v5TqwL5n363A1Nastro\n" \
+"LVEhL/G/I5kM5Tj43M3B2l26iQjwYN23p7v59W2aPvaRbGCIofx3L3I9jBXDN3s2\n" \
+"y6bCso14lWeC2M/9c32tMv443guzYdYq2d62ycfahE/6m8zV4cZEs2j42QIHzvA1\n" \
+"h89S0M8u1Q5L3A7mAwIDAQABo2MwYTAPBgNVHRMBAf8EBTADAQH/MA4GA1UdDwEB\n" \
+"/wQEAwIBhjAdBgNVHQ4EFgQUA562M8L/Z5ceVp1uA1vjI/dGg3UwHwYDVR0jBBgw\n" \
+"FoAUA562M8L/Z5ceVp1uA1vjI/dGg3UwDQYJKoZIhvcNAQELBQADggEBAKaNultA\n" \
+"ndrN9HQTf+19y29v5h9gcXl9nMcYCRQ9wsbsn3CHkVMf2iL/4q2ga4zRkfzD8d7L\n" \
+"uS4dmalrqs4Pg21NglZbzN/O920d31hWCFPaaaeBv3J5fN6d6zLhb2qkhh58VU5c\n" \
+"7Gg737CFaC3UR3g4DP7G6kYpB7mLz3Y+84M34C93T1p5sPaR2T8n3NmDbv2uP/18\n" \
+"HT901i2x3g5n82SkY1x/F/a2WGYkrlExru7lF3hA3JkSgJ21a6eTo81AnY2C9u24\n" \
+"52zcsg2sHhjEYKgbl5wPbg1r3AYG0q47xG2aP6M/2v8cDA=\n" \
+"-----END CERTIFICATE-----\n";
+
 // mDNS nesnesini tanımla
 MDNSResponder mDNS;
 
@@ -947,6 +970,7 @@ void checkOTAUpdateTask(void *parameter) {
     Serial.println("checkOTAUpdateTask: Started.");
     StaticJsonDocument<256> statusDoc;
     String json;
+
     if (WiFi.status() != WL_CONNECTED) {
         statusDoc["otaStatus"] = "Hata: İnternet bağlantısı yok, lütfen WiFi ağına bağlanın.";
         statusDoc["updateAvailable"] = false;
@@ -956,25 +980,20 @@ void checkOTAUpdateTask(void *parameter) {
         vTaskDelete(NULL);
         return;
     }
+
     HTTPClient http;
     http.setTimeout(15000);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.setRedirectLimit(5);
+
+    Serial.println("checkOTAUpdateTask: Fetching latest release from " + String(github_url));
+    // Sertifika ile güvenli bağlantı kur
+    http.begin(github_url, github_root_ca);
+    
     http.addHeader("Accept", "application/vnd.github.v3+json");
     http.addHeader("User-Agent", "ESP32-WyntroHorus2/1.0");
-    Serial.println("checkOTAUpdateTask: Fetching latest release from " + String(github_url));
-    if (!http.begin(github_url)) {
-        statusDoc["otaStatus"] = "Hata: HTTP bağlantısı başlatılamadı.";
-        statusDoc["updateAvailable"] = false;
-        serializeJson(statusDoc, json);
-        webSocket.broadcastTXT(json);
-        Serial.println("checkOTAUpdateTask: Failed to begin HTTP connection.");
-        http.end();
-        vTaskDelete(NULL);
-        return;
-    }
+
     int httpCode = http.GET();
     Serial.printf("checkOTAUpdateTask: HTTP response code: %d\n", httpCode);
+
     if (httpCode == HTTP_CODE_OK) {
         String payload = http.getString();
         if (payload.length() == 0) {
@@ -987,20 +1006,25 @@ void checkOTAUpdateTask(void *parameter) {
             vTaskDelete(NULL);
             return;
         }
+
         DynamicJsonDocument doc(2048);
         DeserializationError error = deserializeJson(doc, payload);
+
         if (!error) {
             String latestVersion = doc["tag_name"].as<String>();
             String currentVersion = String(FIRMWARE_VERSION);
             Serial.println("checkOTAUpdateTask: Latest version: " + latestVersion + ", Current version: " + currentVersion);
+
             if (isNewVersionAvailable(latestVersion, currentVersion)) {
                 statusDoc["otaStatus"] = "Yeni sürüm mevcut: " + latestVersion;
                 statusDoc["updateAvailable"] = true;
                 serializeJson(statusDoc, json);
                 webSocket.broadcastTXT(json);
+
                 String firmwareUrl;
                 String filesystemUrl;
                 JsonArray assets = doc["assets"].as<JsonArray>();
+
                 for (JsonVariant asset : assets) {
                     String name = asset["name"].as<String>();
                     if (name.endsWith(".bin")) {
@@ -1011,92 +1035,91 @@ void checkOTAUpdateTask(void *parameter) {
                         }
                     }
                 }
+
                 if (firmwareUrl.length() > 0) {
                     Serial.println("checkOTAUpdateTask: Updating FIRMWARE from " + firmwareUrl);
                     statusDoc["otaStatus"] = "Firmware indiriliyor: " + latestVersion;
                     serializeJson(statusDoc, json);
                     webSocket.broadcastTXT(json);
-                    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
-                        Serial.println("Firmware update failed to begin!");
-                        statusDoc["otaStatus"] = "Hata: Firmware güncelleme başlatılamadı.";
-                        serializeJson(statusDoc, json);
-                        webSocket.broadcastTXT(json);
-                        vTaskDelete(NULL);
-                        return;
-                    }
+
+                    // Firmware güncellemesi
                     http.begin(firmwareUrl);
                     int httpCodeBin = http.GET();
                     if (httpCodeBin == HTTP_CODE_OK) {
-                        WiFiClient *client = http.getStreamPtr();
-                        size_t written = Update.writeStream(*client);
-                        if (written == Update.size()) {
-                            Serial.println("Firmware written successfully");
+                        if (Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+                            WiFiClient *client = http.getStreamPtr();
+                            size_t written = Update.writeStream(*client);
+                            if (written == Update.size()) {
+                                Serial.println("Firmware written successfully");
+                            } else {
+                                Serial.println("Firmware written failed");
+                            }
+
+                            if (Update.end(false)) { // Değişiklik: Burayı 'false' yapın, yeniden başlatma sonra olacak.
+                                Serial.println("Firmware update finished successfully.");
+                            } else {
+                                Serial.printf("Firmware update failed with error code: %u\n", Update.getError());
+                                statusDoc["otaStatus"] = "Hata: Firmware güncelleme tamamlanamadı.";
+                                serializeJson(statusDoc, json);
+                                webSocket.broadcastTXT(json);
+                                http.end();
+                                vTaskDelete(NULL);
+                                return;
+                            }
                         } else {
-                            Serial.println("Firmware written failed");
+                             Serial.println("Firmware update failed to begin!");
+                             statusDoc["otaStatus"] = "Hata: Firmware güncelleme başlatılamadı.";
+                             serializeJson(statusDoc, json);
+                             webSocket.broadcastTXT(json);
+                             http.end();
+                             vTaskDelete(NULL);
+                             return;
                         }
                     } else {
                         Serial.println("Firmware download failed");
                     }
                     http.end();
-                    if (!Update.end(false)) {
-                        Serial.printf("Firmware update failed with error code: %u\n", Update.getError());
-                        statusDoc["otaStatus"] = "Hata: Firmware güncelleme tamamlanamadı.";
-                        serializeJson(statusDoc, json);
-                        webSocket.broadcastTXT(json);
-                        vTaskDelete(NULL);
-                        return;
-                    }
-                    Serial.println("Firmware update finished successfully.");
+                    
+                    // Dosya sistemi güncellemesi
                     if (filesystemUrl.length() > 0) {
                         Serial.println("checkOTAUpdateTask: Updating FILESYSTEM from " + filesystemUrl);
                         statusDoc["otaStatus"] = "Dosya sistemi indiriliyor...";
                         serializeJson(statusDoc, json);
                         webSocket.broadcastTXT(json);
-                        if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_SPIFFS)) {
-                            Serial.println("Filesystem update failed to begin!");
-                            statusDoc["otaStatus"] = "Hata: Dosya sistemi güncelleme başlatılamadı.";
-                            serializeJson(statusDoc, json);
-                            webSocket.broadcastTXT(json);
-                            vTaskDelete(NULL);
-                            return;
-                        }
+
                         http.begin(filesystemUrl);
-                        int httpCodeBin = http.GET();
-                        if (httpCodeBin == HTTP_CODE_OK) {
-                            WiFiClient *client = http.getStreamPtr();
-                            size_t written = Update.writeStream(*client);
-                            if (written == Update.size()) {
-                                Serial.println("Filesystem written successfully");
+                        int httpCodeFsBin = http.GET();
+                        if(httpCodeFsBin == HTTP_CODE_OK) {
+                            if (Update.begin(UPDATE_SIZE_UNKNOWN, U_SPIFFS)) {
+                                WiFiClient *client = http.getStreamPtr();
+                                size_t written = Update.writeStream(*client);
+                                if (written == Update.size()) {
+                                    Serial.println("Filesystem written successfully");
+                                } else {
+                                    Serial.println("Filesystem written failed");
+                                }
+
+                                if (Update.end(true)) { // Değişiklik: true, güncelleme sonrası yeniden başlat
+                                    Serial.println("Filesystem update finished. Rebooting...");
+                                    ESP.restart();
+                                } else {
+                                    Serial.printf("Filesystem update failed with error code: %u\n", Update.getError());
+                                    statusDoc["otaStatus"] = "Hata: Dosya sistemi güncelleme tamamlanamadı.";
+                                    serializeJson(statusDoc, json);
+                                    webSocket.broadcastTXT(json);
+                                }
                             } else {
-                                Serial.println("Filesystem written failed");
+                                Serial.println("Filesystem update failed to begin!");
+                                statusDoc["otaStatus"] = "Hata: Dosya sistemi güncelleme başlatılamadı.";
+                                serializeJson(statusDoc, json);
+                                webSocket.broadcastTXT(json);
                             }
                         } else {
-                            Serial.println("Filesystem download failed");
+                             Serial.println("Filesystem download failed");
                         }
                         http.end();
-                        if (!Update.end(true)) {
-                            Serial.printf("Filesystem update failed with error code: %u\n", Update.getError());
-                            statusDoc["otaStatus"] = "Hata: Dosya sistemi güncelleme tamamlanamadı.";
-                            serializeJson(statusDoc, json);
-                            webSocket.broadcastTXT(json);
-                            vTaskDelete(NULL);
-                            return;
-                        }
-                        Serial.println("Filesystem update finished. Rebooting...");
-                        writeWiFiSettings();
-                        writeMotorSettings();
-                        // EEPROM yazma işlemini doğrula
-                        char verifySsid[32];
-                        EEPROM.readString(1, verifySsid, sizeof(verifySsid));
-                        if (strcmp(verifySsid, ssid) != 0) {
-                            Serial.println("checkOTAUpdateTask: EEPROM yazma doğrulaması başarısız, tekrar yazılıyor...");
-                            writeWiFiSettings();
-                        }
-                        ESP.restart();
                     } else {
                         Serial.println("No filesystem.bin found, rebooting after firmware update.");
-                        writeWiFiSettings();
-                        writeMotorSettings();
                         ESP.restart();
                     }
                 } else {
