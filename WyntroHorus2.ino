@@ -79,7 +79,7 @@ DNSServer dnsServer;
 uint8_t baseMac[6];
 char mac_suffix[5];
 const uint8_t EEPROM_INITIALIZED_FLAG = 0xAA;
-StaticJsonDocument<2048> scanDoc;
+StaticJsonDocument<4096> scanDoc;
 
 // Function prototypes
 void readSettings();
@@ -763,6 +763,7 @@ void handleSaveWiFi() {
 void handleScan() {
     Serial.println("handleScan: Ağ taraması başlatılıyor (sync)...");
     
+    WiFi.mode(WIFI_STA); // WiFi tarama için STA moduna geç
     int networksFound = WiFi.scanNetworks();
     
     if (networksFound == WIFI_SCAN_FAILED) {
@@ -773,23 +774,39 @@ void handleScan() {
     
     Serial.printf("handleScan: Bulunan ağlar: %d\n", networksFound);
     
+    // Her bir SSID ve RSSI değerini logla
+    for (int i = 0; i < networksFound; i++) {
+        Serial.println("SSID: " + WiFi.SSID(i) + ", RSSI: " + String(WiFi.RSSI(i)));
+    }
+    
+    // JSON oluştur
     scanDoc.clear();
-    scanDoc["networks"] = JsonArray();
-    JsonArray networks = scanDoc["networks"];
+    JsonArray networks = scanDoc.createNestedArray("networks"); // Doğrudan dizi oluştur
+    if (!networks) {
+        Serial.println("handleScan: JsonArray oluşturma başarısız!");
+        server.send(200, "application/json", "{\"status\":\"JSON array creation failed\"}");
+        return;
+    }
     
     for (int i = 0; i < networksFound; i++) {
         JsonObject network = networks.createNestedObject();
+        if (!network) {
+            Serial.println("handleScan: JsonObject oluşturma başarısız!");
+            continue;
+        }
         network["ssid"] = WiFi.SSID(i);
         network["rssi"] = WiFi.RSSI(i);
     }
     
     String response;
     serializeJson(scanDoc, response);
-    Serial.println("handleScan: Gönderilen JSON: " + response); // JSON içeriğini seri monitöre yazdır
+    Serial.println("handleScan: Gönderilen JSON: " + response);
+    server.sendHeader("Access-Control-Allow-Origin", "*"); // CORS için
     server.send(200, "application/json", response);
     
-    WiFi.scanDelete();
+    WiFi.scanDelete(); // Hafızayı temizle
 }
+
 void handleStatus() {
   StaticJsonDocument<256> doc;
   doc["status"] = running ? "Çalışıyor" : "Durduruldu";
