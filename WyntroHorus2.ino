@@ -157,21 +157,12 @@ void initEEPROM() {
   }
 }
 
-void clearEEPROM() {
-  Serial.println("EEPROM'u temizleniyor...");
-  for (int i = 0; i < EEPROM.length(); i++) {
-    EEPROM.writeByte(i, 0);
-  }
-  EEPROM.commit();
-  Serial.println("EEPROM temizlendi.");
-}
 
 void setup() {
   Serial.begin(115200);
   EEPROM.begin(512);
   vTaskDelay(pdMS_TO_TICKS(100));
   initEEPROM();
-  clearEEPROM(); //GEÇİCİ SİL BUNU
   
   if (!LittleFS.begin(false)) {
     Serial.println("LittleFS mount failed, even after format!");
