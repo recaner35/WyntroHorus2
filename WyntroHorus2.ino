@@ -763,7 +763,7 @@ void handleSaveWiFi() {
 void handleScan() {
     Serial.println("handleScan: Ağ taraması başlatılıyor (sync)...");
     
-    int networksFound = WiFi.scanNetworks();  // Senkron tarama
+    int networksFound = WiFi.scanNetworks();
     
     if (networksFound == WIFI_SCAN_FAILED) {
         Serial.println("handleScan: Tarama başarısız.");
@@ -785,11 +785,11 @@ void handleScan() {
     
     String response;
     serializeJson(scanDoc, response);
+    Serial.println("handleScan: Gönderilen JSON: " + response); // JSON içeriğini seri monitöre yazdır
     server.send(200, "application/json", response);
     
-    WiFi.scanDelete();  // Hafızayı temizle
+    WiFi.scanDelete();
 }
-
 void handleStatus() {
   StaticJsonDocument<256> doc;
   doc["status"] = running ? "Çalışıyor" : "Durduruldu";
