@@ -45,7 +45,7 @@ int otherHorusCount = 0;
 
 // OTA Settings
 const char* github_url = "https://api.github.com/repos/recaner35/WyntroHorus2/releases/latest";
-const char* FIRMWARE_VERSION = "v1.0.77";
+const char* FIRMWARE_VERSION = "v1.0.78";
 
 // WiFi Settings
 const char* default_ssid = "HorusAP";
@@ -478,7 +478,7 @@ void readSettings() {
     
     // Varsayılan motor ayarları (ilk yüklemede sıfır olmaması için)
     if (turnsPerDay <= 0 || turnsPerDay > 1200) turnsPerDay = 900;
-    if (turnDuration <= 0.0 || turnDuration > 15.0) turnDuration = 10.0;
+    if (turnDuration <= 10.0 || turnDuration > 15.0) turnDuration = 10.0;
     if (direction < 1 || direction > 3) direction = 3;
     
     calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
@@ -962,9 +962,9 @@ void handleManualUpdate() {
 
 void resetMotor() {
     stopMotor();
-    turnsPerDay = 600;
-    turnDuration = 15.0;
-    direction = 1;
+    turnsPerDay = 900;
+    turnDuration = 10.0;
+    direction = 3;
     completedTurns = 0;
     hourlyTurns = turnsPerDay / 24;
     currentStepIndex = 0;
