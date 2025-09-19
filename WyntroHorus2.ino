@@ -434,45 +434,27 @@ void runMotorTask(void *parameter) {
 }
 
 void readSettings() {
-  int address = 1; // Bayraktan sonra başla
-  EEPROM.readBytes(address, ssid, sizeof(ssid));
-  address += sizeof(ssid);
-  EEPROM.readBytes(address, password, sizeof(password));
-  address += sizeof(password);
-  EEPROM.readBytes(address, custom_name, sizeof(custom_name));
-  address += sizeof(custom_name);
-  EEPROM.get(address, turnsPerDay);
-  address += sizeof(turnsPerDay);
-  EEPROM.get(address, turnDuration);
-  address += sizeof(turnDuration);
-  EEPROM.get(address, direction);
-
-  // Veriyi geçerli bir metin yap
-  ssid[sizeof(ssid) - 1] = '\0';
+  // Null ile doldur
+  memset(ssid, 0, sizeof(ssid));
+  memset(password, 0, sizeof(password));
+  memset(custom_name, 0, sizeof(custom_name));
+    
+  EEPROM.readBytes(1, ssid, sizeof(ssid) - 1);
+  ssid[sizeof(ssid) - 1] = '\0'; // Null terminate
+    
+  EEPROM.readBytes(33, password, sizeof(password) - 1);
   password[sizeof(password) - 1] = '\0';
+    
+  EEPROM.readBytes(97, custom_name, sizeof(custom_name) - 1);
   custom_name[sizeof(custom_name) - 1] = '\0';
-
-  // SSID'nin geçerli olup olmadığını kontrol et
-  bool validSSID = true;
-  for (int i = 0; i < strlen(ssid); i++) {
-    if (!isPrintable(ssid[i])) {
-      validSSID = false;
-      break;
-    }
-  }
-  if (!validSSID || strlen(ssid) == 0) {
-    ssid[0] = '\0'; // Geçersiz veya boşsa sıfırla
-  }
-
-  if (turnsPerDay < 600 || turnsPerDay > 1200 || isnan(turnsPerDay)) turnsPerDay = 600;
-  if (turnDuration < 10.0 || turnDuration > 15.0 || isnan(turnDuration)) turnDuration = 15.0;
-  if (direction < 1 || direction > 3) direction = 1;
-
-  hourlyTurns = turnsPerDay / 24;
+    
+  EEPROM.readBytes(118, &turnsPerDay, sizeof(turnsPerDay));
+  EEPROM.readBytes(122, &turnDuration, sizeof(turnDuration));
+  EEPROM.readBytes(126, &direction, sizeof(direction));
+    
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
-  calculatedStepDelay = constrain(calculatedStepDelay, minStepDelay, maxStepDelay);
-  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms, SSID=%s\n",
-                turnsPerDay, turnDuration, direction, calculatedStepDelay, ssid);
+  Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms, SSID='%s', Password='%s', CustomName='%s'\n",
+                turnsPerDay, turnDuration, direction, calculatedStepDelay, ssid, password, custom_name);
 }
 
 void writeMotorSettings() {
@@ -487,14 +469,30 @@ void writeMotorSettings() {
 }
 
 void writeWiFiSettings() {
-  int address = 0;
-  EEPROM.writeBytes(address, ssid, sizeof(ssid));
-  address += sizeof(ssid);
-  EEPROM.writeBytes(address, password, sizeof(password));
-  address += sizeof(password);
-  EEPROM.writeBytes(address, custom_name, sizeof(custom_name));
+  // Null ile doldur ve yaz
+  memset(ssid, 0, sizeof(ssid));
+  if (server.hasArg("ssid")) {
+    strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid) - 1);
+  }
+  ssid[sizeof(ssid) - 1] = '\0';
+    
+  memset(password, 0, sizeof(password));
+  if (server.hasArg("password")) {
+    strncpy(password, server.arg("password").c_str(), sizeof(password) - 1);
+  }
+  password[sizeof(password) - 1] = '\0';
+    
+  memset(custom_name, 0, sizeof(custom_name));
+  if (server.hasArg("name")) {
+    strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name) - 1);
+  }
+  custom_name[sizeof(custom_name) - 1] = '\0';
+    
+  EEPROM.writeBytes(1, ssid, sizeof(ssid));
+  EEPROM.writeBytes(33, password, sizeof(password));
+  EEPROM.writeBytes(97, custom_name, sizeof(custom_name));
   EEPROM.commit();
-  Serial.println("writeWiFiSettings: WiFi settings saved, restarting...");
+  Serial.printf("writeWiFiSettings: SSID='%s', Password='%s', CustomName='%s' kaydedildi.\n", ssid, password, custom_name);
 }
 
 void setupWiFi() {
