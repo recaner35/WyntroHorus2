@@ -114,17 +114,32 @@ void initEEPROM() {
   EEPROM.readBytes(0, &flag, 1);
   if (flag != EEPROM_INITIALIZED_FLAG) {
     Serial.println("initEEPROM: EEPROM başlatılmamış, sıfırlanıyor...");
+    // Mevcut ayarları oku (eğer varsa)
+    char tempSsid[32] = "";
+    char tempPassword[64] = "";
+    char tempCustomName[21] = "";
+    EEPROM.readBytes(1, tempSsid, sizeof(tempSsid));
+    EEPROM.readBytes(33, tempPassword, sizeof(tempPassword));
+    EEPROM.readBytes(97, tempCustomName, sizeof(tempCustomName));
+
+    // EEPROM'u sıfırla
     for (int i = 0; i < 512; i++) {
       EEPROM.writeByte(i, 0);
     }
-    EEPROM.writeByte(0, EEPROM_INITIALIZED_FLAG);
-    EEPROM.commit();
-    Serial.println("initEEPROM: EEPROM sıfırlandı.");
+      EEPROM.writeByte(0, EEPROM_INITIALIZED_FLAG);
+
+    // Önceki ayarları geri yaz (eğer geçerliyse)
+    if (strlen(tempSsid) > 0) {
+      EEPROM.writeBytes(1, tempSsid, sizeof(tempSsid));
+      EEPROM.writeBytes(33, tempPassword, sizeof(tempPassword));
+      EEPROM.writeBytes(97, tempCustomName, sizeof(tempCustomName));
+    }
+      EEPROM.commit();
+      Serial.println("initEEPROM: EEPROM sıfırlandı, mevcut ayarlar korundu.");
   } else {
-    Serial.println("initEEPROM: EEPROM zaten başlatılmış.");
+      Serial.println("initEEPROM: EEPROM zaten başlatılmış.");
   }
 }
-
 
 void setup() {
   Serial.begin(115200);
@@ -1070,6 +1085,8 @@ void checkOTAUpdateTask(void *parameter) {
                   return;
               }
               Serial.println("Filesystem update finished. Rebooting...");
+              writeWiFiSettings();
+              writeMotorSettings();
               ESP.restart();
           } else {
             Serial.println("No filesystem.bin found, rebooting after firmware update.");
