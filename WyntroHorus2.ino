@@ -157,11 +157,21 @@ void initEEPROM() {
   }
 }
 
+void clearEEPROM() {
+  Serial.println("EEPROM'u temizleniyor...");
+  for (int i = 0; i < EEPROM.length(); i++) {
+    EEPROM.writeByte(i, 0);
+  }
+  EEPROM.commit();
+  Serial.println("EEPROM temizlendi.");
+}
+
 void setup() {
   Serial.begin(115200);
   EEPROM.begin(512);
   vTaskDelay(pdMS_TO_TICKS(100));
   initEEPROM();
+  clearEEPROM(); //GEÇİCİ SİL BUNU
   
   if (!LittleFS.begin(false)) {
     Serial.println("LittleFS mount failed, even after format!");
@@ -455,24 +465,21 @@ void runMotorTask(void *parameter) {
 }
 
 void readSettings() {
-  // Null ile doldur
+  // Değişkenleri temizle
   memset(ssid, 0, sizeof(ssid));
   memset(password, 0, sizeof(password));
   memset(custom_name, 0, sizeof(custom_name));
-    
-  EEPROM.readBytes(1, ssid, sizeof(ssid) - 1);
-  ssid[sizeof(ssid) - 1] = '\0'; // Null terminate
-    
-  EEPROM.readBytes(33, password, sizeof(password) - 1);
-  password[sizeof(password) - 1] = '\0';
-    
-  EEPROM.readBytes(97, custom_name, sizeof(custom_name) - 1);
-  custom_name[sizeof(custom_name) - 1] = '\0';
-    
+
+  // Verileri EEPROM'dan oku
+  EEPROM.readString(1, ssid, sizeof(ssid) -1);
+  EEPROM.readString(33, password, sizeof(password) -1);
+  EEPROM.readString(97, custom_name, sizeof(custom_name) -1);
+
+  // Motor ayarlarını oku
   EEPROM.readBytes(118, &turnsPerDay, sizeof(turnsPerDay));
   EEPROM.readBytes(122, &turnDuration, sizeof(turnDuration));
   EEPROM.readBytes(126, &direction, sizeof(direction));
-    
+
   calculatedStepDelay = (turnDuration * 1000.0) / stepsPerTurn;
   Serial.printf("readSettings: TPD=%d, Duration=%.2f, Direction=%d, StepDelay=%.2fms, SSID='%s', Password='%s', CustomName='%s'\n",
                 turnsPerDay, turnDuration, direction, calculatedStepDelay, ssid, password, custom_name);
@@ -490,28 +497,28 @@ void writeMotorSettings() {
 }
 
 void writeWiFiSettings() {
-  // Null ile doldur ve yaz
+  // SSID'yi temizle ve sunucudan gelen yeni değeri al
   memset(ssid, 0, sizeof(ssid));
   if (server.hasArg("ssid")) {
     strncpy(ssid, server.arg("ssid").c_str(), sizeof(ssid) - 1);
   }
-  ssid[sizeof(ssid) - 1] = '\0';
-    
+
+  // Parolayı temizle ve sunucudan gelen yeni değeri al
   memset(password, 0, sizeof(password));
   if (server.hasArg("password")) {
     strncpy(password, server.arg("password").c_str(), sizeof(password) - 1);
   }
-  password[sizeof(password) - 1] = '\0';
-    
+
+  // Cihaz adını temizle ve sunucudan gelen yeni değeri al
   memset(custom_name, 0, sizeof(custom_name));
   if (server.hasArg("name")) {
     strncpy(custom_name, server.arg("name").c_str(), sizeof(custom_name) - 1);
   }
-  custom_name[sizeof(custom_name) - 1] = '\0';
-    
-  EEPROM.writeBytes(1, ssid, sizeof(ssid));
-  EEPROM.writeBytes(33, password, sizeof(password));
-  EEPROM.writeBytes(97, custom_name, sizeof(custom_name));
+
+  // Verileri EEPROM'a yaz
+  EEPROM.writeString(1, ssid);
+  EEPROM.writeString(33, password);
+  EEPROM.writeString(97, custom_name);
   EEPROM.commit();
   Serial.printf("writeWiFiSettings: SSID='%s', Password='%s', CustomName='%s' kaydedildi.\n", ssid, password, custom_name);
 }
