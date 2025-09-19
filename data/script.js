@@ -1193,28 +1193,26 @@ function handleMessage(data) {
 }
 
 function connectWebSocket() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        return;
-    }
-    ws = new WebSocket('ws://' + window.location.hostname + ':81/');
+    ws = new WebSocket(`ws://${window.location.hostname}:81`);
+    
     ws.onopen = function() {
         console.log('WebSocket connection opened.');
-        clearInterval(reconnectInterval);
-        ws.send('status_request');
+        requestStatusUpdate(); // Bağlantı açıldığında durum güncellemesi iste
     };
+    
     ws.onmessage = function(event) {
         console.log('Message received:', event.data);
-        handleMessage(event.data);
+        const data = JSON.parse(event.data);
+        updateStatus(data);
     };
+    
     ws.onclose = function() {
-        console.log('WebSocket connection closed, reconnecting...');
-        if (!reconnectInterval) {
-            reconnectInterval = setInterval(connectWebSocket, 5000);
-        }
+        console.log('WebSocket connection closed. Attempting to reconnect...');
+        setTimeout(connectWebSocket, 5000); // 5 saniye sonra yeniden bağlan
     };
+    
     ws.onerror = function(error) {
         console.error('WebSocket error:', error);
-        ws.close();
     };
 }
 
@@ -1345,13 +1343,14 @@ function scanNetworks() {
     
     fetch('/scan')
         .then(response => {
-            console.log('Scan response status:', response.status); // HTTP durum kodunu logla
-            return response.json(); // JSON'a çevir
+            console.log('Scan response status:', response.status);
+            return response.json();
         })
         .then(data => {
-            console.log('Scan response data:', data); // Gelen JSON verisini logla
+            console.log('Raw scan response:', JSON.stringify(data));
+            console.log('Scan response data:', data);
             const select = document.getElementById('ssidSelect');
-            select.innerHTML = ''; // Önceki listeyi temizle
+            select.innerHTML = '';
             if (data.networks && Array.isArray(data.networks)) {
                 data.networks.forEach(net => {
                     const option = document.createElement('option');
@@ -1359,15 +1358,17 @@ function scanNetworks() {
                     option.innerText = `${net.ssid} (${net.rssi})`;
                     select.appendChild(option);
                 });
-                console.log('Dropdown updated with', data.networks.length, 'networks'); // Güncelleme logu
+                console.log('Dropdown updated with', data.networks.length, 'networks');
             } else {
-                console.error('No networks found or invalid response:', data); // Hata logu
+                console.error('No networks found or invalid response:', data);
+                alert(getTranslation('alertConnectionError') + ' Tarama sonuçları alınamadı.');
             }
             scanButton.innerText = originalText;
             scanButton.disabled = false;
         })
         .catch(error => {
-            console.error('Scan error:', error); // Hata logu
+            console.error('Scan error:', error);
+            alert(getTranslation('alertConnectionError') + ' ' + error.message);
             scanButton.innerText = originalText;
             scanButton.disabled = false;
         });
@@ -1445,6 +1446,7 @@ function uploadFirmware() {
     });
 
 }
+
 
 
 
